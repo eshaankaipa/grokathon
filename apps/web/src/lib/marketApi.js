@@ -1,0 +1,153 @@
+import { supabase } from "./supabase";
+
+const MARKET_FIELDS = [
+  "id",
+  "slug",
+  "question",
+  "description",
+  "resolution_criteria",
+  "category",
+  "status",
+  "outcome",
+  "yes_price",
+  "volume",
+  "trader_count",
+  "liquidity_parameter",
+  "closes_at",
+  "resolved_at",
+  "source_tweet_id",
+  "source_tweet_url",
+  "creator_x_handle",
+  "created_at",
+].join(",");
+
+const accents = ["violet", "orange", "blue", "green", "red", "yellow"];
+
+function accentFor(value = "") {
+  const hash = [...value].reduce((total, character) => total + character.charCodeAt(0), 0);
+  return accents[hash % accents.length];
+}
+
+export function mapMarket(record, history = []) {
+  const yesPrice = Number(record.yes_price);
+  const historyValues = history.map((point) => Number(point.yes_price) * 100);
+  const spark = historyValues.length > 1 ? historyValues : [yesPrice * 100, yesPrice * 100];
+  const firstPrice = spark[0] / 100;
+  return {
+    dbId: record.id,
+    id: record.slug,
+    category: record.category,
+    question: record.question,
+    description: record.description,
+    resolutionCriteria: record.resolution_criteria,
+    yesPrice,
+    change: Math.round((yesPrice - firstPrice) * 100),
+    volume: Number(record.volume),
+    traders: Number(record.trader_count),
+    liquidityParameter: Number(record.liquidity_parameter || 1000),
+    status: record.status,
+    outcome: record.outcome,
+    closesAtIso: record.closes_at,
+    closesAt: new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(record.closes_at)),
+    createdAt: record.created_at,
+    creator: record.creator_x_handle,
+    sourceTweetId: record.source_tweet_id,
+    sourceTweetUrl: record.source_tweet_url,
+    accent: accentFor(record.category || record.slug),
+    spark,
+  };
+}
+
+function requireClient() {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  return supabase;
+}
+
+export async function listMarkets() {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("markets")
+    .select(MARKET_FIELDS)
+    .in("status", ["open", "closed", "resolved"])
+    .order("volume", { ascending: false });
+  if (error) throw error;
+  return (data || []).map((record) => mapMarket(record));
+}
+
+export async function getMarket(slug) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("markets")
+    .select(MARKET_FIELDS)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+
+  const { data: history, error: historyError } = await client
+    .from("market_price_history")
+    .select("yes_price,recorded_at")
+    .eq("market_id", data.id)
+    .gte("recorded_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+    .order("recorded_at", { ascending: true })
+    .limit(120);
+
+  return mapMarket(data, historyError ? [] : history || []);
+}
+
+export async function getProfile(userId) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("profiles")
+    .select("id,display_name,x_handle,demo_balance")
+    .eq("id", userId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getPositions() {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("positions")
+    .select("market_id,outcome,shares,average_price,updated_at,markets(id,slug,question,yes_price,status,outcome)")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function buyPosition({ marketSlug, outcome, amount, clientOrderId }) {
+  const client = requireClient();
+  const { data, error } = await client.rpc("buy_market_position", {
+    p_market_slug: marketSlug,
+    p_outcome: outcome,
+    p_amount: amount,
+    p_client_order_id: clientOrderId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export function estimateLmsrShares(market, outcome, amount) {
+  const sidePrice = outcome === "YES" ? market.yesPrice : 1 - market.yesPrice;
+  const liquidity = market.liquidityParameter;
+  if (!amount || amount <= 0 || !sidePrice || !liquidity) return 0;
+  return liquidity * Math.log((Math.exp(amount / liquidity) - (1 - sidePrice)) / sidePrice);
+}
+
+export function subscribeToMarket(slug, onChange) {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`market:${slug}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "markets", filter: `slug=eq.${slug}` },
+      () => onChange(),
+    )
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}

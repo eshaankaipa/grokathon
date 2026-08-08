@@ -1,0 +1,14 @@
+{
+  "name": "xmarket-browser-extension",
+  "private": true,
+  "version": "0.3.1",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.2",
+    "esbuild": "^0.28.2"
+  }
+}

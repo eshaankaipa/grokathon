@@ -1,6 +1,6 @@
-# X Prediction Markets Bot — Guide
+# xmarket Bot — Guide
 
-Automated poster for **[@XPredMarkets](https://x.com/XPredMarkets)**  
+Automated poster for **[@xmarket](https://x.com/xmarket)**  
 Live site: **https://xpred.aidenhuang.com**
 
 ---
@@ -51,7 +51,7 @@ curl -sS -X POST 'https://xpred.aidenhuang.com/post' \
   "ok": true,
   "id": "2086169359274397759",
   "text": "Hello from the bot",
-  "url": "https://x.com/XPredMarkets/status/2086169359274397759"
+  "url": "https://x.com/xmarket/status/2086169359274397759"
 }
 ```
 
@@ -65,10 +65,10 @@ Base URL: `https://xpred.aidenhuang.com`
 |--------|------|------|-------------|
 | `GET` | `/` | No | Dashboard (HTML) |
 | `GET` | `/health` | No | Liveness check |
-| `GET` | `/status` | No | Bot identity (`@XPredMarkets`) + post count |
+| `GET` | `/status` | No | Bot identity (`@xmarket`) + post count |
 | `GET` | `/whoami` | No | Same as `/status` |
 | `GET` | `/posts?limit=20` | No | Posts made **through this API** (D1 log) |
-| `POST` | `/post` | **Yes** | Create a post as `@XPredMarkets` |
+| `POST` | `/post` | **Yes** | Create a post as `@xmarket` |
 
 ### Auth for `POST /post`
 
@@ -108,7 +108,7 @@ curl -sS https://xpred.aidenhuang.com/posts?limit=10
 | Live site | https://xpred.aidenhuang.com |
 | Cloudflare Worker | `xpredmarkets-cf` |
 | D1 database | `xpredmarkets-db` (post history) |
-| X account | [@XPredMarkets](https://x.com/XPredMarkets) |
+| X account | [@xmarket](https://x.com/xmarket) |
 
 ### Admin token
 
@@ -150,7 +150,7 @@ In `~/.env` and as Worker secrets:
 |---------|------|
 | `X_API_KEY` | OAuth 1.0a Consumer Key |
 | `X_API_SECRET` | OAuth 1.0a Consumer Secret |
-| `X_ACCESS_TOKEN` | User access token for @XPredMarkets |
+| `X_ACCESS_TOKEN` | User access token for @xmarket |
 | `X_ACCESS_TOKEN_SECRET` | User access secret |
 
 Also stored locally (optional / secondary):
@@ -176,7 +176,7 @@ echo -n "$X_ACCESS_TOKEN_SECRET" | npx wrangler secret put X_ACCESS_TOKEN_SECRET
 
 If posting returns **403 oauth1-permissions**:
 
-1. [developer.x.com](https://developer.x.com) → Project **X Prediction Markets** → App  
+1. [developer.x.com](https://developer.x.com) → Project **xmarket** → App  
 2. User authentication settings:
    - **App permissions:** Read and write  
    - **Type of App:** Web App, Automated App or Bot  
@@ -240,7 +240,7 @@ python3 ~/Downloads/utilities/x_bot/x_post.py --dry-run "would post this"
 |---------|-----|
 | `401 unauthorized` on `/post` | Wrong or missing admin token |
 | `403` + `oauth1-permissions` | App is Read-only; set Read and write, regenerate Access Token + Secret, update secrets |
-| `/status` shows wrong user | Access tokens are for a different X account — regenerate while logged into @XPredMarkets |
+| `/status` shows wrong user | Access tokens are for a different X account — regenerate while logged into @xmarket |
 | Site 404 / old behavior | `npx wrangler deploy` from `xpredmarkets-cf` |
 | Post works via CLI but not site | Worker secrets out of date — re-run `wrangler secret put` for the X tokens |
 
@@ -257,7 +257,7 @@ https://xpred.aidenhuang.com  (Cloudflare Worker)
        │
        │  OAuth 1.0a (X_* secrets)
        ▼
-   api.x.com  →  @XPredMarkets
+   api.x.com  →  @xmarket
        │
        ▼
    D1 xpredmarkets-db  (log of posts made through the API)
