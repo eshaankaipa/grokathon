@@ -1,0 +1,23 @@
+{
+  "name": "xpredmarkets-cf",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "types": "wrangler types",
+    "db:apply": "wrangler d1 migrations apply xpredmarkets-db --remote",
+    "db:apply:local": "wrangler d1 migrations apply xpredmarkets-db --local",
+    "db:query": "wrangler d1 execute xpredmarkets-db --remote --command"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260808.1",
+    "@types/node": "^26.1.1",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.108.0"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2"
+  }
+}

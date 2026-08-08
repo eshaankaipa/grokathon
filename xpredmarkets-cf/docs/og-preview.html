@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Market OG image — design preview</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 2rem;
+      background: #09090b;
+      color: #fafafa;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    p { color: #a1a1aa; margin: 0 0 1.5rem; max-width: 60ch; line-height: 1.5; }
+    h2 { font-size: 0.9rem; color: #71717a; text-transform: uppercase; letter-spacing: 0.08em; margin: 2rem 0 0.75rem; }
+    .frame {
+      width: min(100%, 1200px);
+      aspect-ratio: 1200 / 630;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px #0008;
+      background: #0a0a0b;
+    }
+    .frame object, .frame img { width: 100%; height: 100%; display: block; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 0.75rem;
+      max-width: 1200px;
+      margin-top: 1rem;
+    }
+    .meta div {
+      background: #141416;
+      border: 1px solid #27272a;
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+    }
+    .meta strong { display: block; color: #71717a; font-weight: 500; margin-bottom: 0.2rem; }
+  </style>
+</head>
+<body>
+  <h1>Market OG image design</h1>
+  <p>
+    1200×630 share card for X Prediction Markets. Shows market name, YES/NO options,
+    implied price (¢), probability bar, and $1 payout caption. Spec:
+    <code>docs/OG_IMAGE_DESIGN.md</code>
+  </p>
+
+  <h2>Open · live</h2>
+  <div class="frame">
+    <object type="image/svg+xml" data="og-market-open.svg" title="Open market OG"></object>
+  </div>
+  <div class="meta">
+    <div><strong>Question</strong> Will Grokathon ship markets today?</div>
+    <div><strong>YES</strong> 66¢ · Pays $1.00 if yes</div>
+    <div><strong>NO</strong> 34¢ · Pays $1.00 if no</div>
+    <div><strong>Footer</strong> xpred.aidenhuang.com · Vol 65</div>
+  </div>
+
+  <h2>Resolved · YES</h2>
+  <div class="frame">
+    <object type="image/svg+xml" data="og-market-resolved.svg" title="Resolved market OG"></object>
+  </div>
+  <div class="meta">
+    <div><strong>Winner</strong> YES @ $1.00 / share</div>
+    <div><strong>Loser</strong> NO @ $0.00 (dimmed)</div>
+    <div><strong>Pill</strong> RESOLVED · YES</div>
+  </div>
+</body>
+</html>
