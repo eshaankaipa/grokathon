@@ -1,7 +1,7 @@
 # Market OG Image Design
 
-**Size:** 1200 × 630 (Open Graph / X card standard)
-**Format:** SVG source of truth → rasterize to PNG at deploy/share time
+**Size:** 1200 × 630 (Open Graph / X card standard)  
+**Format:** SVG source of truth → rasterize to PNG at deploy/share time  
 **Brand:** X Prediction Markets (`@XPredMarkets`) — dark UI aligned with xpred.aidenhuang.com
 
 ---
@@ -10,8 +10,8 @@
 
 When a market is shared (X, iMessage, Discord, Slack), the preview card must answer in one glance:
 
-1. **What is the market?** (question / name)
-2. **What can I pick?** (options)
+1. **What is the market?** (question / name)  
+2. **What can I pick?** (options)  
 3. **What are the odds / payouts?** (implied probability + $1-at-resolution framing)
 
 ---
@@ -99,17 +99,17 @@ Prefer system UI / Inter / SF Pro style geometric sans. **No decorative script.*
 
 **Option card**
 
-- Rounded 20px, 1px border
-- Left/top accent wash matching side
-- Contents top→bottom: label → **big price** → probability bar → payout caption
-- Price primary unit: **¢ per share** (implied prob × 100), with `%` as secondary or equal
+- Rounded 20px, 1px border  
+- Left/top accent wash matching side  
+- Contents top→bottom: label → **big price** → probability bar → payout caption  
+- Price primary unit: **¢ per share** (implied prob × 100), with `%` as secondary or equal  
 - Payout always: `Pays $1.00 if {yes|no}` for binary play-money (1 credit = $1 framing on card)
 
 **Probability bar**
 
-- Full width inside card, 10px height, rounded
-- Fill = `p_yes` or `p_no`
-- Track `#27272A`, fill yes green / no red
+- Full width inside card, 10px height, rounded  
+- Fill = `p_yes` or `p_no`  
+- Track `#27272A`, fill yes green / no red  
 
 ---
 
@@ -141,50 +141,50 @@ If resolved YES: YES card full emphasis, price → `$1.00`, NO → `$0.00`, bar 
 
 ### 1. Open (default share card)
 
-- Two live prices
-- OPEN · LIVE pill
-- Both cards equal weight
+- Two live prices  
+- OPEN · LIVE pill  
+- Both cards equal weight  
 
 ### 2. Locked
 
-- Same as open but pill LOCKED
+- Same as open but pill LOCKED  
 - Optional subtitle under title: `Trading closed — awaiting resolution`
 
 ### 3. Resolved
 
-- Winning option: thick border, price `$1.00`, checkmark
-- Losing option: opacity 0.45, price `$0.00`
-- Pill: `RESOLVED · YES`
+- Winning option: thick border, price `$1.00`, checkmark  
+- Losing option: opacity 0.45, price `$0.00`  
+- Pill: `RESOLVED · YES`  
 
 ### 4. Voided
 
-- Both options muted
-- Center or footer: `Market voided · stakes refunded`
+- Both options muted  
+- Center or footer: `Market voided · stakes refunded`  
 
 ### 5. Long question
 
-- Font steps down: 52 → 44 → 36 if needed
-- Never overflow into option cards
+- Font steps down: 52 → 44 → 36 if needed  
+- Never overflow into option cards  
 
 ---
 
 ## What not to put on the OG image
 
-- User balances, API keys, wallet addresses
-- Full trade history
-- Tiny footnotes that won’t survive compression
-- More than two options (v1 is binary only; multi-outcome = horizontal chip row later)
+- User balances, API keys, wallet addresses  
+- Full trade history  
+- Tiny footnotes that won’t survive compression  
+- More than two options (v1 is binary only; multi-outcome = horizontal chip row later)  
 - Live sparklines (too noisy at 630px height when compressed)
 
 ---
 
 ## Implementation plan (later)
 
-1. **SVG template** (`og-market.svg` or generated string) with placeholders.
-2. Worker route: `GET /markets/:id/og.png` or `/og/markets/:id`
-   - Load market from D1
-   - Fill SVG
-   - Rasterize (Workers: `@resvg/resvg-wasm`, or Cloudflare Images, or pre-render cache in R2)
+1. **SVG template** (`og-market.svg` or generated string) with placeholders.  
+2. Worker route: `GET /markets/:id/og.png` or `/og/markets/:id`  
+   - Load market from D1  
+   - Fill SVG  
+   - Rasterize (Workers: `@resvg/resvg-wasm`, or Cloudflare Images, or pre-render cache in R2)  
 3. HTML market page meta:
 
 ```html

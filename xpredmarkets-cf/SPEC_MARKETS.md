@@ -261,19 +261,19 @@ Keep existing compose-post + mentions docs at bottom of API pre block.
 
 ## 7. Acceptance tests (manual curl)
 
-1. `POST /users` → key + balance 1000
-2. `POST /markets` (admin) → market id, p_yes ≈ 0.5
-3. `POST /markets/:id/buy` side yes amount 10 → shares > 0, balance < 1000, p_yes rises
-4. `GET /markets` shows updated price
-5. `POST /markets/:id/resolve` outcome yes → winner balance increases
-6. Existing `GET /status` still works
+1. `POST /users` → key + balance 1000  
+2. `POST /markets` (admin) → market id, p_yes ≈ 0.5  
+3. `POST /markets/:id/buy` side yes amount 10 → shares > 0, balance < 1000, p_yes rises  
+4. `GET /markets` shows updated price  
+5. `POST /markets/:id/resolve` outcome yes → winner balance increases  
+6. Existing `GET /status` still works  
 
 ---
 
 ## 8. Implementation order for agents
 
-1. **Agent A**: migration + `src/market.ts` (math + all DB operations, exported functions)
-2. **Agent B**: wire routes in `src/index.ts` using Agent A exports
-3. **Agent C**: update `src/html.ts` + `GUIDE.md`
+1. **Agent A**: migration + `src/market.ts` (math + all DB operations, exported functions)  
+2. **Agent B**: wire routes in `src/index.ts` using Agent A exports  
+3. **Agent C**: update `src/html.ts` + `GUIDE.md`  
 
 Agents B and C must not invent alternate schemas; follow this document exactly.

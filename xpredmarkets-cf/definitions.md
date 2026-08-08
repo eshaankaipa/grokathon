@@ -1,7 +1,7 @@
 # X Prediction Markets API — Definitions
 
-**Base URL:** `https://xpred.aidenhuang.com`
-**Service:** Cloudflare Worker `xpredmarkets-cf`
+**Base URL:** `https://xpred.aidenhuang.com`  
+**Service:** Cloudflare Worker `xpredmarkets-cf`  
 **Bot:** [@XPredMarkets](https://x.com/XPredMarkets)
 
 This document is the contract for every HTTP route: auth, request/response shapes, and domain types.
@@ -65,7 +65,7 @@ Optional alias: `?token=<ADMIN_TOKEN>`
 
 Used for: posting, mentions, create/lock/resolve markets, credits, mention→market wrapper.
 
-Env secret on Worker: `ADMIN_TOKEN`
+Env secret on Worker: `ADMIN_TOKEN`  
 Local: `XPRED_ADMIN_TOKEN` in `~/.env`
 
 ### User (trading)
@@ -226,7 +226,7 @@ No auth.
 ```
 
 #### `GET /`
-- `Accept: text/html` → dashboard UI
+- `Accept: text/html` → dashboard UI  
 - `Accept: application/json` → `{ ok, service, routes: string[] }`
 
 ---
@@ -429,7 +429,7 @@ No auth. Detail + last trades + OG URL.
 No auth.
 
 #### `GET /markets/:id/og` · `GET /markets/:id/og.png`
-No auth. **PNG** 1200×630 Open Graph card
+No auth. **PNG** 1200×630 Open Graph card  
 (title + YES/NO odds + payouts).
 
 #### `GET /markets/:id/og.svg`
@@ -478,7 +478,7 @@ No auth. SVG source (debug).
   "shares": 5
 }
 ```
-- Buy requires `amount`
+- Buy requires `amount`  
 - Sell requires `shares`
 
 ```json

@@ -1,6 +1,6 @@
 # X Prediction Markets Bot — Guide
 
-Automated poster for **[@XPredMarkets](https://x.com/XPredMarkets)**
+Automated poster for **[@XPredMarkets](https://x.com/XPredMarkets)**  
 Live site: **https://xpred.aidenhuang.com**
 
 Play-money **binary prediction markets** on the same Worker (credits, constant-product AMM).
@@ -20,21 +20,21 @@ For **trading** only: open the site → **Register** → save your user API key 
 
 ### Post from the website
 
-1. Open https://xpred.aidenhuang.com
-2. Paste the **admin token** into the Admin token field
-3. Write your post (max 280 characters)
-4. Optional: put a tweet ID in “Reply to” to thread a reply
+1. Open https://xpred.aidenhuang.com  
+2. Paste the **admin token** into the Admin token field  
+3. Write your post (max 280 characters)  
+4. Optional: put a tweet ID in “Reply to” to thread a reply  
 5. Click **Post to X**
 
 The token is stored in your browser’s `localStorage` (`xpred_admin_token`) on that device only.
 
 ### Trade from the website
 
-1. **Register** with a display name → copy the API key (only shown once)
-2. Key is stored as `xpred_user_key` in localStorage
-3. **Markets** list loads open markets with YES probability bars
-4. **Trade** — paste market id (or click one in the list), buy/sell YES/NO
-5. Admins: **Create market** / **Resolve** with the admin token
+1. **Register** with a display name → copy the API key (only shown once)  
+2. Key is stored as `xpred_user_key` in localStorage  
+3. **Markets** list loads open markets with YES probability bars  
+4. **Trade** — paste market id (or click one in the list), buy/sell YES/NO  
+5. Admins: **Create market** / **Resolve** with the admin token  
 
 ### Post from the command line
 
@@ -96,10 +96,10 @@ When someone @mentions the bot, call the **wrapper** so a market is either **cre
 
 **Matching rules**
 
-1. Same `tweet_id` already processed → always redirect to that market
-2. Text contains `mkt_…` or `xpred.aidenhuang.com/markets/mkt_…` → redirect to that id
-3. Open/locked market with same normalized question → redirect
-4. Else → **create** new open market
+1. Same `tweet_id` already processed → always redirect to that market  
+2. Text contains `mkt_…` or `xpred.aidenhuang.com/markets/mkt_…` → redirect to that id  
+3. Open/locked market with same normalized question → redirect  
+4. Else → **create** new open market  
 
 Self-@ from the bot and bare `@bot` with no question are **skipped**.
 
@@ -142,7 +142,7 @@ curl -sS "$BASE/mentions/markets?limit=20" \
 }
 ```
 
-`action` is `created` | `redirected` | `skipped`.
+`action` is `created` | `redirected` | `skipped`.  
 Set `"announce": true` to reply on X with the market + OG links (needs a real `tweet_id`).
 
 ---
@@ -180,7 +180,7 @@ Statuses: `open` → (optional `locked`) → `resolved` or `voided`.
 
 ## Market API (curl examples)
 
-Base URL: `https://xpred.aidenhuang.com`
+Base URL: `https://xpred.aidenhuang.com`  
 All JSON. Errors: `{ "ok": false, "error": "message" }` with 4xx/5xx.
 
 Set placeholders (never commit real values):
@@ -270,7 +270,7 @@ curl -sS -X POST "$BASE/markets/mkt_EXAMPLE/buy" \
   -d '{"side":"yes","amount":10}'
 ```
 
-Body: `{ "side": "yes"|"no", "amount": number }`.
+Body: `{ "side": "yes"|"no", "amount": number }`.  
 Returns trade, position, new balance, updated market pools/prices.
 
 ### Sell (user)
@@ -315,12 +315,12 @@ curl -sS -X POST "$BASE/users/usr_EXAMPLE/credit" \
 
 ### Manual smoke test
 
-1. `POST /users` → key + balance 1000
-2. `POST /markets` (admin) → market id, `p_yes ≈ 0.5`
-3. `POST /markets/:id/buy` side yes amount 10 → shares > 0, balance < 1000, `p_yes` rises
-4. `GET /markets` shows updated price
-5. `POST /markets/:id/resolve` outcome yes → winner balance increases
-6. Existing `GET /status` still works
+1. `POST /users` → key + balance 1000  
+2. `POST /markets` (admin) → market id, `p_yes ≈ 0.5`  
+3. `POST /markets/:id/buy` side yes amount 10 → shares > 0, balance < 1000, `p_yes` rises  
+4. `GET /markets` shows updated price  
+5. `POST /markets/:id/resolve` outcome yes → winner balance increases  
+6. Existing `GET /status` still works  
 
 ---
 
@@ -492,7 +492,7 @@ grep XPRED_ADMIN_TOKEN ~/.env
 
 Same value is set on the Worker as secret `ADMIN_TOKEN`.
 
-**Give collaborators:** site URL + this token only.
+**Give collaborators:** site URL + this token only.  
 **Do not give:** X API keys / access tokens (unless you want them to bypass your site entirely).
 
 ### Rotate the admin token
@@ -541,15 +541,15 @@ echo -n "$X_ACCESS_TOKEN_SECRET" | npx wrangler secret put X_ACCESS_TOKEN_SECRET
 
 If posting returns **403 oauth1-permissions**:
 
-1. [developer.x.com](https://developer.x.com) → Project **X Prediction Markets** → App
+1. [developer.x.com](https://developer.x.com) → Project **X Prediction Markets** → App  
 2. User authentication settings:
-   - **App permissions:** Read and write
-   - **Type of App:** Web App, Automated App or Bot
-   - **Callback URI:** `https://xpred.aidenhuang.com/callback`
-   - **Website URL:** `https://xpred.aidenhuang.com`
-3. Save
-4. **Regenerate Access Token and Secret** (required after permission changes)
-5. Update `~/.env` + Worker secrets
+   - **App permissions:** Read and write  
+   - **Type of App:** Web App, Automated App or Bot  
+   - **Callback URI:** `https://xpred.aidenhuang.com/callback`  
+   - **Website URL:** `https://xpred.aidenhuang.com`  
+3. Save  
+4. **Regenerate Access Token and Secret** (required after permission changes)  
+5. Update `~/.env` + Worker secrets  
 6. Test:
 
 ```bash
@@ -644,10 +644,10 @@ Trading engine: pure AMM helpers in `src/market.ts`; routes in `src/index.ts`; d
 
 ## Security notes
 
-- Treat **admin token**, **user API keys**, and **all X secrets** like passwords.
-- Never commit `~/.env`, `.dev.vars`, or `secrets.json`.
-- Do not put real tokens in this guide or in chat.
-- If tokens were pasted into chat/email, regenerate them in the X developer portal and rotate `ADMIN_TOKEN`.
-- User API keys are shown once at registration; only a hash is stored.
-- OAuth 2 access tokens expire (~2h); refresh tokens last longer — the live poster path does **not** depend on them today.
+- Treat **admin token**, **user API keys**, and **all X secrets** like passwords.  
+- Never commit `~/.env`, `.dev.vars`, or `secrets.json`.  
+- Do not put real tokens in this guide or in chat.  
+- If tokens were pasted into chat/email, regenerate them in the X developer portal and rotate `ADMIN_TOKEN`.  
+- User API keys are shown once at registration; only a hash is stored.  
+- OAuth 2 access tokens expire (~2h); refresh tokens last longer — the live poster path does **not** depend on them today.  
 - Credits are play-money only; nothing here settles real funds.

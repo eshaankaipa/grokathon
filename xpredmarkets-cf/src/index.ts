@@ -16,6 +16,7 @@ import {
   userToPublic,
   type QuoteAction,
   type QuoteSide,
+  type Trade,
   type User,
 } from "./market";
 import {
@@ -23,6 +24,7 @@ import {
   processMentionToMarket,
   processMentionsBatch,
 } from "./mention_market";
+import { processMentionToSupabase } from "./mention_supabase";
 import { marketOgResponse } from "./og";
 import {
   xCreateTweet,
@@ -41,6 +43,16 @@ export interface Env {
   X_ACCESS_TOKEN: string;
   X_ACCESS_TOKEN_SECRET: string;
   ADMIN_TOKEN: string;
+  XAI_API_KEY: string;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
+}
+
+async function getMarketAny(
+  env: Env,
+  marketId: string,
+): Promise<ReturnType<typeof getMarket>> {
+  return getMarket(env, marketId);
 }
 
 function json(data: unknown, status = 200): Response {
@@ -159,7 +171,7 @@ async function requireUser(
     );
   }
 
-  const user = await getUserByApiKey(env.DB, rawKey);
+  const user = await getUserByApiKey(env, rawKey);
   if (!user) {
     return json({ ok: false, error: "invalid api key" }, 401);
   }
@@ -272,7 +284,7 @@ export default {
 
       let persisted = 0;
       if (persist && result.mentions.length) {
-        persisted = await persistMentions(env.DB, result.mentions);
+        persisted = await persistMentions(env, result.mentions);
       }
 
       return json({
@@ -354,16 +366,29 @@ export default {
         if (me.ok) botUserId = me.user.id;
       }
 
-      const result = await processMentionToMarket(env.DB, {
-        text: b.text,
-        tweet_id: b.tweet_id,
-        author_id: b.author_id,
-        author_username: b.author_username,
-        botUsername,
-        botUserId,
-        liquidity: b.liquidity,
-        force_create: b.force_create,
-      });
+      const useGrok =
+        env.XAI_API_KEY && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY;
+
+      const result = useGrok
+        ? await processMentionToSupabase(env, {
+            text: b.text,
+            tweet_id: b.tweet_id,
+            author_id: b.author_id,
+            author_username: b.author_username,
+            botUsername,
+            botUserId,
+            liquidity: b.liquidity,
+          })
+        : await processMentionToMarket(env, {
+            text: b.text,
+            tweet_id: b.tweet_id,
+            author_id: b.author_id,
+            author_username: b.author_username,
+            botUsername,
+            botUserId,
+            liquidity: b.liquidity,
+            force_create: b.force_create,
+          });
       if (!result.ok) return resultJson(result);
 
       const { ok: _ok, ...payload } = result;
@@ -458,10 +483,10 @@ export default {
       }
 
       if (persist && live.mentions.length) {
-        await persistMentions(env.DB, live.mentions);
+        await persistMentions(env, live.mentions);
       }
 
-      const batch = await processMentionsBatch(env.DB, live.mentions, {
+      const batch = await processMentionsBatch(env, live.mentions, {
         botUsername: env.BOT_USERNAME || me.user.username,
         botUserId: me.user.id,
         liquidity: body.liquidity,
@@ -597,7 +622,7 @@ export default {
         ? parseInt(limitRaw, 10)
         : undefined;
       return resultJson(
-        await listMarkets(env.DB, {
+        await listMarkets(env, {
           status,
           limit: Number.isFinite(limit as number) ? limit : undefined,
         }),
@@ -614,7 +639,7 @@ export default {
       const marketId = segments[1];
       const limitRaw = url.searchParams.get("limit");
       const limit = limitRaw ? parseInt(limitRaw, 10) : 20;
-      return resultJson(await listTrades(env.DB, marketId, limit));
+      return resultJson(await listTrades(env, marketId, limit));
     }
 
     // GET /markets/:id/og | /og.png | /og.svg — dynamic OG image
@@ -627,7 +652,7 @@ export default {
       method === "GET"
     ) {
       const marketId = segments[1];
-      const m = await getMarket(env.DB, marketId);
+      const m = await getMarket(env, marketId);
       if (!m.ok) return resultJson(m);
       const format = segments[2] === "og.svg" ? "svg" : "png";
       try {
@@ -645,9 +670,9 @@ export default {
       method === "GET"
     ) {
       const marketId = segments[1];
-      const m = await getMarket(env.DB, marketId);
+      const m = await getMarket(env, marketId);
       if (!m.ok) return resultJson(m);
-      const trades = await listTrades(env.DB, marketId, 20);
+      const trades = await listTrades(env, marketId, 20);
       return json({
         ok: true,
         market: m.market,
@@ -665,7 +690,7 @@ export default {
       const parsed = await readJsonBody<{ display_name?: string }>(request);
       if (!parsed.ok) return parsed.response;
       return resultJson(
-        await createUser(env.DB, parsed.body.display_name ?? ""),
+        await createUser(env, parsed.body.display_name ?? ""),
       );
     }
 
@@ -680,7 +705,7 @@ export default {
     if (path === "/me/positions" && method === "GET") {
       const auth = await requireUser(request, env);
       if (!isUser(auth)) return auth;
-      return resultJson(await getPositions(env.DB, auth.id));
+      return resultJson(await getPositions(env, auth.id));
     }
 
     // POST /markets/:id/quote
@@ -702,7 +727,7 @@ export default {
       if (!parsed.ok) return parsed.response;
       const { side, action, amount, shares } = parsed.body;
       return resultJson(
-        await quote(env.DB, marketId, {
+        await quote(env, marketId, {
           side: side as QuoteSide,
           action: action as QuoteAction,
           amount,
@@ -727,7 +752,7 @@ export default {
       if (!parsed.ok) return parsed.response;
       return resultJson(
         await buy(
-          env.DB,
+          env,
           auth.id,
           marketId,
           parsed.body.side as QuoteSide,
@@ -752,7 +777,7 @@ export default {
       if (!parsed.ok) return parsed.response;
       return resultJson(
         await sell(
-          env.DB,
+          env,
           auth.id,
           marketId,
           parsed.body.side as QuoteSide,
@@ -779,7 +804,7 @@ export default {
       if (!parsed.ok) return parsed.response;
       const b = parsed.body;
       return resultJson(
-        await createMarket(env.DB, {
+        await createMarket(env, {
           question: b.question ?? "",
           description: b.description,
           rules: b.rules,
@@ -799,7 +824,7 @@ export default {
     ) {
       const denied = requireAdmin(request, env);
       if (denied) return denied;
-      return resultJson(await lockMarket(env.DB, segments[1]));
+      return resultJson(await lockMarket(env, segments[1]));
     }
 
     // POST /markets/:id/resolve
@@ -821,7 +846,7 @@ export default {
           400,
         );
       }
-      return resultJson(await resolveMarket(env.DB, marketId, outcome));
+      return resultJson(await resolveMarket(env, marketId, outcome));
     }
 
     // POST /users/:id/credit
@@ -837,7 +862,7 @@ export default {
       const parsed = await readJsonBody<{ amount?: number }>(request);
       if (!parsed.ok) return parsed.response;
       return resultJson(
-        await creditUser(env.DB, userId, Number(parsed.body.amount)),
+        await creditUser(env, userId, Number(parsed.body.amount)),
       );
     }
 
@@ -914,13 +939,13 @@ export default {
 };
 
 async function persistMentions(
-  db: D1Database,
+  env: Env,
   mentions: XMention[],
 ): Promise<number> {
   const now = Math.floor(Date.now() / 1000);
   let n = 0;
   for (const m of mentions) {
-    const res = await db
+    const res = await env.DB
       .prepare(
         `INSERT INTO mentions (
            tweet_id, text, author_id, author_username, author_name,

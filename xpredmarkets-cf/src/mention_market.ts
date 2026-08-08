@@ -12,6 +12,10 @@ import {
   type Result,
 } from "./market";
 import type { XMention } from "./x";
+import type { D1Database } from "@cloudflare/workers-types";
+import type { SupabaseEnv } from "./supabase";
+
+type MentionEnv = SupabaseEnv & { DB: D1Database };
 
 const BASE_URL = "https://xpred.aidenhuang.com";
 const MARKET_ID_RE = /\bmkt_[a-f0-9]{16,}\b/i;
@@ -126,11 +130,11 @@ export function parseMentionText(
   return { kind: "create", question };
 }
 
-async function getProcessedTweet(
-  db: D1Database,
+export async function getProcessedTweet(
+  env: MentionEnv,
   tweetId: string,
 ): Promise<{ market_id: string; action: string; question: string | null } | null> {
-  const row = await db
+  const row = await env.DB
     .prepare(
       `SELECT market_id, action, question FROM mention_markets WHERE tweet_id = ?`,
     )
@@ -139,8 +143,8 @@ async function getProcessedTweet(
   return row ?? null;
 }
 
-async function saveProcessed(
-  db: D1Database,
+export async function saveProcessed(
+  env: MentionEnv,
   row: {
     tweet_id: string;
     market_id: string;
@@ -152,7 +156,7 @@ async function saveProcessed(
   },
 ): Promise<void> {
   const now = Math.floor(Date.now() / 1000);
-  await db
+  await env.DB
     .prepare(
       `INSERT INTO mention_markets
          (tweet_id, market_id, action, question, author_id, author_username, mention_text, processed_at)
@@ -177,18 +181,18 @@ async function saveProcessed(
 }
 
 async function findOpenByQuestion(
-  db: D1Database,
+  env: MentionEnv,
   question: string,
 ): Promise<MarketView | null> {
   const norm = normalizeQuestion(question);
   if (!norm) return null;
-  const listed = await listMarkets(db, { status: "open", limit: 100 });
+  const listed = await listMarkets(env, { status: "open", limit: 100 });
   if (!listed.ok) return null;
   for (const m of listed.markets) {
     if (normalizeQuestion(m.question) === norm) return m;
   }
   // Also match locked markets as redirect targets
-  const locked = await listMarkets(db, { status: "locked", limit: 50 });
+  const locked = await listMarkets(env, { status: "locked", limit: 50 });
   if (locked.ok) {
     for (const m of locked.markets) {
       if (normalizeQuestion(m.question) === norm) return m;
@@ -220,7 +224,7 @@ function pack(
  * Core wrapper: from mention text (+ optional tweet id), create or redirect.
  */
 export async function processMentionToMarket(
-  db: D1Database,
+  env: MentionEnv,
   input: {
     text: string;
     tweet_id?: string;
@@ -236,9 +240,9 @@ export async function processMentionToMarket(
 
   // Idempotent: same tweet always maps to same market
   if (tweetId) {
-    const prev = await getProcessedTweet(db, tweetId);
+    const prev = await getProcessedTweet(env, tweetId);
     if (prev) {
-      const m = await getMarket(db, prev.market_id);
+      const m = await getMarket(env, prev.market_id);
       if (m.ok) {
         return {
           ok: true,
@@ -270,7 +274,7 @@ export async function processMentionToMarket(
   }
 
   if (parsed.kind === "redirect") {
-    const m = await getMarket(db, parsed.marketId);
+    const m = await getMarket(env, parsed.marketId);
     if (!m.ok) {
       return {
         ok: false,
@@ -278,7 +282,7 @@ export async function processMentionToMarket(
       };
     }
     if (tweetId) {
-      await saveProcessed(db, {
+      await saveProcessed(env, {
         tweet_id: tweetId,
         market_id: m.market.id,
         action: "redirected",
@@ -300,10 +304,10 @@ export async function processMentionToMarket(
 
   // create path — but dedupe by question unless force_create
   if (!input.force_create) {
-    const existing = await findOpenByQuestion(db, parsed.question);
+    const existing = await findOpenByQuestion(env, parsed.question);
     if (existing) {
       if (tweetId) {
-        await saveProcessed(db, {
+        await saveProcessed(env, {
           tweet_id: tweetId,
           market_id: existing.id,
           action: "redirected",
@@ -324,7 +328,7 @@ export async function processMentionToMarket(
     }
   }
 
-  const created = await createMarket(db, {
+  const created = await createMarket(env, {
     question: parsed.question,
     description: tweetId
       ? `From mention ${tweetId}${input.author_username ? ` by @${input.author_username}` : ""}`
@@ -337,7 +341,7 @@ export async function processMentionToMarket(
   if (!created.ok) return created;
 
   if (tweetId) {
-    await saveProcessed(db, {
+    await saveProcessed(env, {
       tweet_id: tweetId,
       market_id: created.market.id,
       action: "created",
@@ -362,7 +366,7 @@ export async function processMentionToMarket(
  * Process a batch of X mentions (from /mentions poll).
  */
 export async function processMentionsBatch(
-  db: D1Database,
+  env: MentionEnv,
   mentions: XMention[],
   opts: {
     botUsername?: string;
@@ -381,7 +385,7 @@ export async function processMentionsBatch(
   let skipped = 0;
 
   for (const m of mentions) {
-    const r = await processMentionToMarket(db, {
+    const r = await processMentionToMarket(env, {
       text: m.text,
       tweet_id: m.id,
       author_id: m.author_id,
