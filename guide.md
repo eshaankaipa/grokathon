@@ -10,7 +10,7 @@ Live site: **https://xpred.aidenhuang.com**
 ### What you need from Aiden
 
 1. **Site URL:** `https://xpred.aidenhuang.com`
-2. **Admin token** 2B4wGkrPhcyXeQ1h0uP0RqHaiYXLMKVqvmNfLe0Ckic
+2. **Admin token** (password for posting)
 
 That’s it. You do **not** need X API keys.
 
@@ -55,6 +55,23 @@ curl -sS -X POST 'https://xpred.aidenhuang.com/post' \
 }
 ```
 
+### Read mentions
+
+```bash
+export ADMIN_TOKEN='paste-token-here'
+
+# Live mentions of @XPredMarkets
+curl -sS "https://xpred.aidenhuang.com/mentions?limit=10" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Live + save to cache
+curl -sS "https://xpred.aidenhuang.com/mentions?limit=20&persist=1" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Cached only (no admin token)
+curl -sS "https://xpred.aidenhuang.com/mentions/cached?limit=50"
+```
+
 ---
 
 ## API reference
@@ -69,6 +86,79 @@ Base URL: `https://xpred.aidenhuang.com`
 | `GET` | `/whoami` | No | Same as `/status` |
 | `GET` | `/posts?limit=20` | No | Posts made **through this API** (D1 log) |
 | `POST` | `/post` | **Yes** | Create a post as `@XPredMarkets` |
+| `GET` | `/mentions?limit=10` | **Yes** | Live mentions of the bot from X API |
+| `GET` | `/mentions/cached?limit=50` | No | Mentions previously stored in D1 |
+
+### Mentions
+
+Pull tweets that **@mention** the bot account:
+
+```bash
+export ADMIN_TOKEN='paste-token-here'
+
+# Live from X (last N mentions)
+curl -sS "https://xpred.aidenhuang.com/mentions?limit=10" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Live + save into D1 for later
+curl -sS "https://xpred.aidenhuang.com/mentions?limit=20&persist=1" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Only new mentions after a tweet id
+curl -sS "https://xpred.aidenhuang.com/mentions?since_id=2086169359274397759" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+
+# Read cached mentions (no X call, no admin token)
+curl -sS "https://xpred.aidenhuang.com/mentions/cached?limit=50"
+```
+
+Query params for `/mentions`:
+
+| Param | Description |
+|-------|-------------|
+| `limit` | 5–100 (default 10) |
+| `since_id` | Only mentions newer than this tweet id |
+| `pagination_token` | Next page from prior `meta.next_token` |
+| `persist` | `1` / `true` → upsert into D1 |
+
+Each mention includes `id`, `text`, `author_id`, `author_username`, `author_name`, `created_at`, `conversation_id`, `url`.
+
+**Example success response:**
+
+```json
+{
+  "ok": true,
+  "user": { "id": "1966780828966334465", "username": "XPredMarkets" },
+  "count": 2,
+  "mentions": [
+    {
+      "id": "2086189907610058953",
+      "text": "@XPredMarkets",
+      "author_id": "2086189398593515520",
+      "author_username": "aideniwnl",
+      "author_name": "aiden huang",
+      "created_at": "2026-08-08T20:36:48.000Z",
+      "url": "https://x.com/aideniwnl/status/2086189907610058953"
+    }
+  ],
+  "meta": {
+    "result_count": 2,
+    "newest_id": "2086189907610058953",
+    "oldest_id": "...",
+    "next_token": "..."
+  },
+  "persisted": 2
+}
+```
+
+**Poll for new mentions only** (store last `newest_id`, pass as `since_id`):
+
+```bash
+curl -sS "https://xpred.aidenhuang.com/mentions?since_id=$LAST_ID&persist=1" \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Also update the architecture note: D1 now holds posts **and** mentions when `persist=1`.
 
 ### Auth for `POST /post`
 
@@ -226,7 +316,7 @@ python3 ~/Downloads/utilities/x_bot/x_post.py --dry-run "would post this"
 
 | You want them to… | Give them |
 |-------------------|-----------|
-| Post via the website / API | URL + **admin token only** |
+| Post or read live mentions via the website / API | URL + **admin token only** |
 | Run their own scripts against X | OAuth 1.0a four-pack (high risk — full bot control) |
 | Maintain the Cloudflare Worker | CF access + code + all secrets |
 
@@ -243,6 +333,9 @@ python3 ~/Downloads/utilities/x_bot/x_post.py --dry-run "would post this"
 | `/status` shows wrong user | Access tokens are for a different X account — regenerate while logged into @XPredMarkets |
 | Site 404 / old behavior | `npx wrangler deploy` from `xpredmarkets-cf` |
 | Post works via CLI but not site | Worker secrets out of date — re-run `wrangler secret put` for the X tokens |
+| `401` on `/mentions` | Admin token required (same as `/post`) |
+| `/mentions` empty | No @mentions yet, or `since_id` is past the newest mention |
+| Cached mentions stale | Call `/mentions?persist=1` to refresh D1 from X |
 
 ---
 
@@ -260,7 +353,7 @@ https://xpred.aidenhuang.com  (Cloudflare Worker)
    api.x.com  →  @XPredMarkets
        │
        ▼
-   D1 xpredmarkets-db  (log of posts made through the API)
+   D1 xpredmarkets-db  (posts + cached mentions)
 ```
 
 ---
