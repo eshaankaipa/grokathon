@@ -4,3 +4,5 @@ node_modules/
 secrets.json
 *.log
 worker-configuration.d.ts
+.DS_Store
+bundle/
