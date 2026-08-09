@@ -7,3 +7,15 @@ dist/
 !.env.example
 supabase/.temp/
 .playwright-mcp/
+
+# Python (market-classifier / sweeper module)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+.ruff_cache/
+
+# SDD scratch workspace
+.superpowers/
