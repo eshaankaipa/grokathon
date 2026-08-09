@@ -1,0 +1,260 @@
+{
+  "_comment": "Labelled classifier corpus. Engagement numbers are deliberate: the low-engagement case must be downgraded to WAIT even though the event itself is tradeable. `expect_date` is checked only when present. Dates are kept well in the future: a corpus pinned near 'today' starts failing the classifier's past-date guard the moment that day passes.",
+  "cases": [
+    {
+      "name": "scheduled game",
+      "expect": "CREATE",
+      "expect_date": "2027-08-08",
+      "cluster": {
+        "topic": "#NBA",
+        "tweets": [
+          {
+            "id": "1",
+            "author": "nbaonx",
+            "text": "Lakers at Warriors on August 8, 2027. Curry questionable, LeBron probable.",
+            "likes": 5200,
+            "reposts": 1400,
+            "replies": 600,
+            "views": 1200000
+          },
+          {
+            "id": "2",
+            "author": "dubnation",
+            "text": "Chase Center August 8 2027 vs the Lakers. Dubs need this one.",
+            "likes": 1900,
+            "reposts": 430,
+            "replies": 280,
+            "views": 210000
+          }
+        ]
+      }
+    },
+    {
+      "name": "scheduled earnings",
+      "expect": "CREATE",
+      "cluster": {
+        "topic": "$NVDA",
+        "tweets": [
+          {
+            "id": "10",
+            "author": "marketwatch",
+            "text": "NVIDIA reports Q3 earnings on November 18, 2026. Street expects $1.42 EPS.",
+            "likes": 4100,
+            "reposts": 980,
+            "replies": 320,
+            "views": 800000
+          },
+          {
+            "id": "11",
+            "author": "traderjoe",
+            "text": "NVDA November 18 earnings is the whole quarter for semis",
+            "likes": 2200,
+            "reposts": 510,
+            "replies": 190,
+            "views": 300000
+          }
+        ]
+      }
+    },
+    {
+      "name": "scheduled product event",
+      "expect": "CREATE",
+      "cluster": {
+        "topic": "Apple event",
+        "tweets": [
+          {
+            "id": "20",
+            "author": "markgurman",
+            "text": "Apple has set its fall keynote for September 9, 2026. Foldable iPhone expected.",
+            "likes": 9000,
+            "reposts": 3100,
+            "replies": 900,
+            "views": 4000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeable but barely trending",
+      "note": "Engagement floor must downgrade this to WAIT regardless of what the model says.",
+      "expect": "WAIT",
+      "cluster": {
+        "topic": "minor league",
+        "tweets": [
+          {
+            "id": "30",
+            "author": "smallaccount",
+            "text": "Reno Aces vs Las Vegas Aviators on September 3, 2026",
+            "likes": 4,
+            "reposts": 1,
+            "replies": 0,
+            "views": 300
+          }
+        ]
+      }
+    },
+    {
+      "name": "rumour with no date",
+      "expect": "WAIT",
+      "cluster": {
+        "topic": "trade rumours",
+        "tweets": [
+          {
+            "id": "40",
+            "author": "woj",
+            "text": "Sources: talks have picked up on a potential blockbuster trade. Nothing imminent.",
+            "likes": 22000,
+            "reposts": 6400,
+            "replies": 2100,
+            "views": 9000000
+          },
+          {
+            "id": "41",
+            "author": "shams",
+            "text": "Hearing the same. No timeline yet.",
+            "likes": 8000,
+            "reposts": 1900,
+            "replies": 700,
+            "views": 2000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "developing story, outcome undefined",
+      "expect": "WAIT",
+      "cluster": {
+        "topic": "breaking",
+        "tweets": [
+          {
+            "id": "50",
+            "author": "reuters",
+            "text": "Breaking: regulators are reviewing the proposed merger. No decision timeline announced.",
+            "likes": 6000,
+            "reposts": 2200,
+            "replies": 800,
+            "views": 3000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "subjective opinion",
+      "expect": "REJECT",
+      "cluster": {
+        "topic": "hot takes",
+        "tweets": [
+          {
+            "id": "60",
+            "author": "takesguy",
+            "text": "Honestly the new album is the worst thing released this decade and nobody wants to admit it",
+            "likes": 8800,
+            "reposts": 2300,
+            "replies": 4100,
+            "views": 2000000
+          },
+          {
+            "id": "61",
+            "author": "musicfan",
+            "text": "hard disagree, it's a masterpiece, people just have no taste",
+            "likes": 3200,
+            "reposts": 700,
+            "replies": 900,
+            "views": 400000
+          }
+        ]
+      }
+    },
+    {
+      "name": "already resolved",
+      "expect": "REJECT",
+      "cluster": {
+        "topic": "final score",
+        "tweets": [
+          {
+            "id": "70",
+            "author": "espn",
+            "text": "FINAL: Warriors 118, Lakers 112. Curry with 34.",
+            "likes": 41000,
+            "reposts": 9000,
+            "replies": 3000,
+            "views": 12000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "engagement-farm bait",
+      "expect": "REJECT",
+      "cluster": {
+        "topic": "viral",
+        "tweets": [
+          {
+            "id": "80",
+            "author": "baitaccount",
+            "text": "RT if you think this tweet will get 100k likes. Like if you think it won't. Reply either way!!",
+            "likes": 50000,
+            "reposts": 20000,
+            "replies": 15000,
+            "views": 20000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "meme with no real event",
+      "expect": "REJECT",
+      "cluster": {
+        "topic": "memes",
+        "tweets": [
+          {
+            "id": "90",
+            "author": "shitposter",
+            "text": "what if the moon was made of cheese and we could all just take a bite",
+            "likes": 33000,
+            "reposts": 8000,
+            "replies": 2400,
+            "views": 7000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "harm market \u2014 individual's health",
+      "note": "Must reject regardless of how hard it is trending.",
+      "expect": "REJECT",
+      "cluster": {
+        "topic": "trending",
+        "tweets": [
+          {
+            "id": "100",
+            "author": "gossipacct",
+            "text": "Reports that the CEO has been hospitalized. No official word on his condition.",
+            "likes": 30000,
+            "reposts": 12000,
+            "replies": 5000,
+            "views": 15000000
+          }
+        ]
+      }
+    },
+    {
+      "name": "harm market \u2014 private individual",
+      "expect": "REJECT",
+      "cluster": {
+        "topic": "drama",
+        "tweets": [
+          {
+            "id": "110",
+            "author": "randomuser",
+            "text": "will my roommate finally move out this month lmao place your bets",
+            "likes": 12000,
+            "reposts": 3000,
+            "replies": 1800,
+            "views": 4000000
+          }
+        ]
+      }
+    }
+  ]
+}

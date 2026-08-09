@@ -1,0 +1,370 @@
+{
+  "_comment": "Labelled dedup corpus. `markets` are seeded into a scratch store; each case proposes a new market and states which existing one it truly duplicates (null = genuinely new). Hard negatives are the point: same teams different day, same asset different threshold, same game different prop.",
+
+  "markets": [
+    {
+      "id": "m_gsw_lal",
+      "question": "Will the Golden State Warriors defeat the Los Angeles Lakers on August 8, 2026?",
+      "event": "Golden State Warriors vs Los Angeles Lakers, Aug 8 2026",
+      "query": "Warriors Lakers August 8 2026",
+      "category": "sports",
+      "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+      "resolution_date": "2026-08-08"
+    },
+    {
+      "id": "m_curry_points",
+      "question": "Will Stephen Curry score more than 30 points against the Los Angeles Lakers on August 8, 2026?",
+      "event": "Stephen Curry point total vs Los Angeles Lakers, Aug 8 2026",
+      "query": "Curry 30 points Lakers August 8 2026",
+      "category": "sports",
+      "entities": ["Stephen Curry", "Los Angeles Lakers"],
+      "resolution_date": "2026-08-08"
+    },
+    {
+      "id": "m_btc_150k",
+      "question": "Will Bitcoin close above $150,000 on December 31, 2026?",
+      "event": "Bitcoin year-end close 2026 above 150k",
+      "query": "Bitcoin 150000 December 31 2026 close",
+      "category": "crypto",
+      "entities": ["Bitcoin"],
+      "resolution_date": "2026-12-31"
+    },
+    {
+      "id": "m_eth_10k",
+      "question": "Will Ethereum close above $10,000 on December 31, 2026?",
+      "event": "Ethereum year-end close 2026 above 10k",
+      "query": "Ethereum 10000 December 31 2026 close",
+      "category": "crypto",
+      "entities": ["Ethereum"],
+      "resolution_date": "2026-12-31"
+    },
+    {
+      "id": "m_apple_fold",
+      "question": "Will Apple announce a foldable iPhone at its September 2026 event?",
+      "event": "Apple September 2026 product event, foldable iPhone announcement",
+      "query": "Apple foldable iPhone September 2026 event",
+      "category": "tech",
+      "entities": ["Apple"],
+      "resolution_date": "2026-09-30"
+    },
+    {
+      "id": "m_sb_lxi",
+      "question": "Will the Kansas City Chiefs win Super Bowl LXI against the San Francisco 49ers on February 7, 2027?",
+      "event": "Super Bowl LXI: Kansas City Chiefs vs San Francisco 49ers, Feb 7 2027",
+      "query": "Super Bowl LXI Chiefs 49ers February 7 2027",
+      "category": "sports",
+      "entities": ["Kansas City Chiefs", "San Francisco 49ers"],
+      "resolution_date": "2027-02-07"
+    },
+    {
+      "id": "m_fed_sept",
+      "question": "Will the Federal Reserve cut interest rates at the September 2026 FOMC meeting?",
+      "event": "September 2026 FOMC rate decision",
+      "query": "Fed rate cut September 2026 FOMC",
+      "category": "markets",
+      "entities": ["Federal Reserve"],
+      "resolution_date": "2026-09-17"
+    },
+    {
+      "id": "m_ca_gov",
+      "question": "Will the Democratic candidate win the California governor election on November 3, 2026?",
+      "event": "California governor election, Nov 3 2026",
+      "query": "California governor election November 2026",
+      "category": "politics",
+      "entities": ["California"],
+      "resolution_date": "2026-11-03"
+    },
+    {
+      "id": "m_gpt6",
+      "question": "Will OpenAI release GPT-6 before January 1, 2027?",
+      "event": "OpenAI GPT-6 public release before 2027",
+      "query": "OpenAI GPT-6 release before 2027",
+      "category": "tech",
+      "entities": ["OpenAI"],
+      "resolution_date": "2026-12-31"
+    }
+  ],
+
+  "cases": [
+    {
+      "name": "exact restatement",
+      "duplicate_of": "m_gsw_lal",
+      "proposal": {
+        "event": "Golden State Warriors vs Los Angeles Lakers, Aug 8 2026",
+        "query": "Warriors Lakers August 8 2026",
+        "category": "sports",
+        "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "inverted phrasing",
+      "note": "One result settles both. Cosine ranks this BELOW the different-date negative.",
+      "duplicate_of": "m_gsw_lal",
+      "proposal": {
+        "event": "Los Angeles Lakers lose to Golden State Warriors, Aug 8 2026",
+        "query": "Lakers lose Warriors August 8 2026",
+        "category": "sports",
+        "entities": ["Los Angeles Lakers", "Golden State Warriors"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "abbreviated team names",
+      "duplicate_of": "m_gsw_lal",
+      "proposal": {
+        "event": "GSW vs LAL, Aug 8 2026",
+        "query": "GSW LAL Aug 8 2026",
+        "category": "sports",
+        "entities": ["GSW", "LAL"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "nickname phrasing",
+      "duplicate_of": "m_gsw_lal",
+      "proposal": {
+        "event": "Dubs beat the Lakers at Chase Center, August 8 2026",
+        "query": "Dubs Lakers Chase Center August 8 2026",
+        "category": "sports",
+        "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "same teams, next day",
+      "note": "Cosine 0.984 — above the auto-duplicate threshold. The date gate must catch this.",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Golden State Warriors vs Los Angeles Lakers, Aug 9 2026",
+        "query": "Warriors Lakers August 9 2026",
+        "category": "sports",
+        "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+        "resolution_date": "2026-08-09"
+      }
+    },
+    {
+      "name": "same game, different prop",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Total combined points, Warriors vs Lakers, Aug 8 2026",
+        "query": "Warriors Lakers total points over 220 August 8 2026",
+        "category": "sports",
+        "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "same game, different player prop",
+      "note": "Must not collide with the Curry points market either — different threshold.",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Stephen Curry three-pointers made vs Los Angeles Lakers, Aug 8 2026",
+        "query": "Curry threes Lakers August 8 2026",
+        "category": "sports",
+        "entities": ["Stephen Curry", "Los Angeles Lakers"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "existing player prop, reworded",
+      "duplicate_of": "m_curry_points",
+      "proposal": {
+        "event": "Will Steph Curry drop 30+ on the Lakers, Aug 8 2026",
+        "query": "Curry 30 plus points Lakers August 8 2026",
+        "category": "sports",
+        "entities": ["Stephen Curry", "Los Angeles Lakers"],
+        "resolution_date": "2026-08-08"
+      }
+    },
+    {
+      "name": "bitcoin restated",
+      "duplicate_of": "m_btc_150k",
+      "proposal": {
+        "event": "BTC above $150k at 2026 year end",
+        "query": "BTC 150k year end 2026",
+        "category": "crypto",
+        "entities": ["Bitcoin"],
+        "resolution_date": "2026-12-31"
+      }
+    },
+    {
+      "name": "bitcoin, different threshold",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Bitcoin year-end close 2026 above 100k",
+        "query": "Bitcoin 100000 December 31 2026 close",
+        "category": "crypto",
+        "entities": ["Bitcoin"],
+        "resolution_date": "2026-12-31"
+      }
+    },
+    {
+      "name": "bitcoin, same threshold different date",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Bitcoin above 150k on June 30 2027",
+        "query": "Bitcoin 150000 June 30 2027",
+        "category": "crypto",
+        "entities": ["Bitcoin"],
+        "resolution_date": "2027-06-30"
+      }
+    },
+    {
+      "name": "different asset, same shape",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Solana year-end close 2026 above 500",
+        "query": "Solana 500 December 31 2026 close",
+        "category": "crypto",
+        "entities": ["Solana"],
+        "resolution_date": "2026-12-31"
+      }
+    },
+    {
+      "name": "ethereum restated",
+      "duplicate_of": "m_eth_10k",
+      "proposal": {
+        "event": "ETH above $10,000 at the end of 2026",
+        "query": "ETH 10k end of 2026",
+        "category": "crypto",
+        "entities": ["Ethereum"],
+        "resolution_date": "2026-12-31"
+      }
+    },
+    {
+      "name": "apple, different product",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Apple September 2026 product event, foldable iPad announcement",
+        "query": "Apple foldable iPad September 2026 event",
+        "category": "tech",
+        "entities": ["Apple"],
+        "resolution_date": "2026-09-30"
+      }
+    },
+    {
+      "name": "apple restated",
+      "duplicate_of": "m_apple_fold",
+      "proposal": {
+        "event": "Foldable iPhone unveiled at Apple's fall 2026 keynote",
+        "query": "foldable iPhone Apple fall keynote 2026",
+        "category": "tech",
+        "entities": ["Apple"],
+        "resolution_date": "2026-09-30"
+      }
+    },
+    {
+      "name": "super bowl, opposite team framing",
+      "note": "Binary two-team game: one team winning settles both.",
+      "duplicate_of": "m_sb_lxi",
+      "proposal": {
+        "event": "San Francisco 49ers lose Super Bowl LXI to Kansas City Chiefs, Feb 7 2027",
+        "query": "49ers lose Super Bowl LXI Chiefs February 2027",
+        "category": "sports",
+        "entities": ["San Francisco 49ers", "Kansas City Chiefs"],
+        "resolution_date": "2027-02-07"
+      }
+    },
+    {
+      "name": "super bowl, different prop",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Super Bowl LXI MVP award winner, Feb 7 2027",
+        "query": "Super Bowl LXI MVP February 7 2027",
+        "category": "sports",
+        "entities": ["Kansas City Chiefs", "San Francisco 49ers"],
+        "resolution_date": "2027-02-07"
+      }
+    },
+    {
+      "name": "fed restated",
+      "duplicate_of": "m_fed_sept",
+      "proposal": {
+        "event": "FOMC lowers the federal funds rate in September 2026",
+        "query": "FOMC lower rates September 2026",
+        "category": "markets",
+        "entities": ["Federal Reserve"],
+        "resolution_date": "2026-09-17"
+      }
+    },
+    {
+      "name": "fed, different meeting",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "December 2026 FOMC rate decision",
+        "query": "Fed rate cut December 2026 FOMC",
+        "category": "markets",
+        "entities": ["Federal Reserve"],
+        "resolution_date": "2026-12-16"
+      }
+    },
+    {
+      "name": "fed, opposite direction same meeting",
+      "note": "A hike and a cut are different outcomes, not inverses — 'no cut' includes 'hold'.",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "September 2026 FOMC raises rates",
+        "query": "Fed rate hike September 2026 FOMC",
+        "category": "markets",
+        "entities": ["Federal Reserve"],
+        "resolution_date": "2026-09-17"
+      }
+    },
+    {
+      "name": "different state, same office and day",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Texas governor election, Nov 3 2026",
+        "query": "Texas governor election November 2026",
+        "category": "politics",
+        "entities": ["Texas"],
+        "resolution_date": "2026-11-03"
+      }
+    },
+    {
+      "name": "same race, party framing flipped",
+      "duplicate_of": "m_ca_gov",
+      "proposal": {
+        "event": "Republican loses the California governor race, Nov 3 2026",
+        "query": "California governor Republican lose November 2026",
+        "category": "politics",
+        "entities": ["California"],
+        "resolution_date": "2026-11-03"
+      }
+    },
+    {
+      "name": "gpt-6 restated",
+      "duplicate_of": "m_gpt6",
+      "proposal": {
+        "event": "OpenAI ships GPT-6 by end of 2026",
+        "query": "OpenAI GPT-6 shipped by end of 2026",
+        "category": "tech",
+        "entities": ["OpenAI"],
+        "resolution_date": "2026-12-31"
+      }
+    },
+    {
+      "name": "different lab, same shape",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Anthropic releases Claude 6 before 2027",
+        "query": "Anthropic Claude 6 release before 2027",
+        "category": "tech",
+        "entities": ["Anthropic"],
+        "resolution_date": "2026-12-31"
+      }
+    },
+    {
+      "name": "entirely unrelated",
+      "duplicate_of": null,
+      "proposal": {
+        "event": "Category 4 hurricane makes landfall in Florida before Oct 2026",
+        "query": "Florida hurricane category 4 landfall 2026",
+        "category": "weather",
+        "entities": ["Florida"],
+        "resolution_date": "2026-10-01"
+      }
+    }
+  ]
+}

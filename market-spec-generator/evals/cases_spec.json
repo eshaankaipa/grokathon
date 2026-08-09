@@ -1,0 +1,169 @@
+{
+  "_comment": "Market Spec Generator corpus. Each case is an EventSpec the upstream sweeper could send. `expect_valid` says whether a usable spec should come out at all; `expect_*` fields assert specific properties. Dates are far enough out that the corpus does not rot within a season.",
+
+  "cases": [
+    {
+      "name": "sports fixture",
+      "expect_valid": true,
+      "expect_closes_at_null": true,
+      "expect_question_contains": ["Golden State Warriors", "Los Angeles Lakers"],
+      "expect_criteria_not_cancellation_as_no": true,
+      "event": {
+        "canonical_event": "Golden State Warriors vs Los Angeles Lakers on March 8, 2027",
+        "query": "Golden State Warriors Los Angeles Lakers March 8 2027",
+        "category": "sports",
+        "context_summary": "Conversation centers on the scheduled Warriors-Lakers game.",
+        "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+        "key_developments": ["The game is scheduled for March 8, 2027"],
+        "unresolved_events": ["game winner"]
+      }
+    },
+    {
+      "name": "product release with deadline",
+      "expect_valid": true,
+      "expect_closes_at_null": true,
+      "expect_question_contains": ["OpenAI"],
+      "event": {
+        "canonical_event": "OpenAI GPT-6 public release before September 30, 2027",
+        "query": "OpenAI GPT-6 release September 2027",
+        "category": "technology",
+        "context_summary": "Speculation that OpenAI will ship GPT-6 before the end of Q3 2027.",
+        "entities": ["OpenAI"],
+        "key_developments": ["No official release date has been announced"],
+        "unresolved_events": ["whether GPT-6 is publicly released before the deadline"]
+      }
+    },
+    {
+      "name": "central bank decision",
+      "expect_valid": true,
+      "expect_question_contains": ["Federal Reserve"],
+      "event": {
+        "canonical_event": "Federal Reserve interest rate decision at the September 2027 FOMC meeting",
+        "query": "Fed rate decision September 2027 FOMC",
+        "category": "finance",
+        "entities": ["Federal Reserve"],
+        "key_developments": ["The FOMC meeting is scheduled for September 2027"],
+        "unresolved_events": ["whether rates are cut"]
+      }
+    },
+    {
+      "name": "election",
+      "expect_valid": true,
+      "expect_question_contains": ["California"],
+      "event": {
+        "canonical_event": "California gubernatorial election on November 2, 2027",
+        "query": "California governor election November 2027",
+        "category": "politics",
+        "entities": ["California"],
+        "key_developments": ["Election day is November 2, 2027"],
+        "unresolved_events": ["which party wins"]
+      }
+    },
+    {
+      "name": "earnings report",
+      "expect_valid": true,
+      "expect_question_contains": ["NVIDIA"],
+      "event": {
+        "canonical_event": "NVIDIA quarterly earnings report on November 18, 2027",
+        "query": "NVIDIA earnings November 18 2027",
+        "category": "finance",
+        "entities": ["NVIDIA"],
+        "key_developments": ["Earnings are scheduled for November 18, 2027 after the bell"],
+        "unresolved_events": ["whether revenue beats guidance"]
+      }
+    },
+    {
+      "name": "product launch with an exact announced time",
+      "note": "The only case where a grounded closes_at is available. The generator may set it, but must not invent one if it doesn't.",
+      "expect_valid": true,
+      "event": {
+        "canonical_event": "Apple product keynote on September 9, 2027 at 10:00 PDT",
+        "query": "Apple keynote September 9 2027",
+        "category": "technology",
+        "entities": ["Apple"],
+        "key_developments": ["The keynote begins at 10:00 PDT on September 9, 2027"],
+        "unresolved_events": ["whether a foldable iPhone is announced"]
+      }
+    },
+    {
+      "name": "space launch",
+      "expect_valid": true,
+      "expect_question_contains": ["SpaceX"],
+      "event": {
+        "canonical_event": "SpaceX Starship orbital flight test before June 30, 2027",
+        "query": "SpaceX Starship orbital test 2027",
+        "category": "science",
+        "entities": ["SpaceX"],
+        "key_developments": ["No confirmed launch date"],
+        "unresolved_events": ["whether the flight reaches orbit"]
+      }
+    },
+    {
+      "name": "postponement-prone fixture",
+      "note": "Weather-exposed event: criteria must not map a washout to NO.",
+      "expect_valid": true,
+      "expect_criteria_not_cancellation_as_no": true,
+      "event": {
+        "canonical_event": "Chicago Cubs vs St. Louis Cardinals on April 14, 2027",
+        "query": "Cubs Cardinals April 14 2027",
+        "category": "sports",
+        "entities": ["Chicago Cubs", "St. Louis Cardinals"],
+        "key_developments": ["Game scheduled for April 14, 2027", "Rain is forecast"],
+        "unresolved_events": ["game winner"]
+      }
+    },
+    {
+      "name": "vague event, no date",
+      "note": "Upstream approved it, so generate the best spec possible — but closes_at must stay null and nothing may be invented.",
+      "expect_valid": true,
+      "expect_closes_at_null": true,
+      "event": {
+        "canonical_event": "Apple announces a foldable iPhone",
+        "query": "Apple foldable iPhone",
+        "category": "technology",
+        "entities": ["Apple"],
+        "key_developments": [],
+        "unresolved_events": ["whether a foldable iPhone is announced"]
+      }
+    },
+    {
+      "name": "subjectively worded event",
+      "note": "The event is phrased subjectively. The generator must produce an objective question anyway, or the validator must reject it.",
+      "expect_valid": true,
+      "expect_question_not_contains": ["amazing", "crush", "successful", "dominate"],
+      "event": {
+        "canonical_event": "Whether NVIDIA crushes its next earnings report on November 18, 2027",
+        "query": "NVIDIA earnings November 2027",
+        "category": "finance",
+        "entities": ["NVIDIA"],
+        "key_developments": ["Earnings scheduled for November 18, 2027"],
+        "unresolved_events": ["whether results beat expectations"]
+      }
+    },
+    {
+      "name": "threshold event",
+      "expect_valid": true,
+      "expect_question_contains": ["Bitcoin"],
+      "event": {
+        "canonical_event": "Bitcoin price above 150,000 USD on December 31, 2027",
+        "query": "Bitcoin 150000 December 31 2027",
+        "category": "finance",
+        "entities": ["Bitcoin"],
+        "key_developments": ["Threshold discussed is 150,000 USD at year end"],
+        "unresolved_events": ["whether the threshold is exceeded"]
+      }
+    },
+    {
+      "name": "regulatory approval",
+      "expect_valid": true,
+      "event": {
+        "canonical_event": "SEC decision on the pending spot Solana ETF applications before December 31, 2027",
+        "query": "SEC Solana ETF decision 2027",
+        "category": "finance",
+        "entities": ["Securities and Exchange Commission", "Solana"],
+        "key_developments": ["Applications are pending before the SEC"],
+        "unresolved_events": ["whether the SEC approves"]
+      }
+    }
+  ]
+}
