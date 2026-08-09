@@ -5,7 +5,6 @@ import {
   ArrowRight,
   BarChart3,
   Check,
-  ChevronDown,
   Clock3,
   Flame,
   LoaderCircle,
@@ -13,7 +12,6 @@ import {
   LogOut,
   Search,
   Sparkles,
-  TrendingUp,
   Wallet,
   X,
 } from "lucide-react";
@@ -64,8 +62,8 @@ function Sparkline({ values, positive = true, large = false }) {
 function Logo({ onClick }) {
   return (
     <button className="logo" onClick={onClick} aria-label="xmarket home">
-      <span className="logo-mark"><TrendingUp size={18} strokeWidth={3} /></span>
-      <span>xmarket</span>
+      <span className="logo-mark" aria-hidden="true">𝕏</span>
+      <span className="logo-word">market</span>
     </button>
   );
 }
@@ -82,9 +80,8 @@ function Header({ page, navigate, openAuth, balance }) {
       <div className="header-inner">
         <Logo onClick={() => navigate("/")} />
         <nav className="desktop-nav" aria-label="Primary navigation">
-          <button className={page === "home" ? "active" : ""} onClick={() => navigate("/")}>Markets</button>
-          <button className={page === "portfolio" ? "active" : ""} onClick={() => navigate("/portfolio")}>Portfolio</button>
-          <button onClick={() => navigate("/about")}>How it works</button>
+          <button className={page === "home" ? "active" : ""} onClick={() => navigate("/")}><BarChart3 size={19} /> Markets</button>
+          <button className={page === "portfolio" ? "active" : ""} onClick={() => navigate("/portfolio")}><Wallet size={19} /> Portfolio</button>
         </nav>
         <div className="header-actions">
           <button className="icon-button search-button" aria-label="Search markets"><Search size={19} /></button>
@@ -118,7 +115,6 @@ function Header({ page, navigate, openAuth, balance }) {
         <nav className="mobile-nav">
           <button onClick={() => { navigate("/"); setMenuOpen(false); }}>Markets</button>
           <button onClick={() => { navigate("/portfolio"); setMenuOpen(false); }}>Portfolio</button>
-          <button onClick={() => { navigate("/about"); setMenuOpen(false); }}>How it works</button>
         </nav>
       )}
     </header>
@@ -245,7 +241,7 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
       return;
     }
     if (balance != null && numericAmount > balance) {
-      setTradeError("Your demo-credit balance is too low for this order.");
+      setTradeError("Your credit balance is too low for this order.");
       return;
     }
 
@@ -271,7 +267,7 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
 
   return (
     <aside className="trade-panel">
-      <div className="trade-heading"><span>Build a position</span><small>Demo credits</small></div>
+      <div className="trade-heading"><span>Build a position</span><small>Credit balance</small></div>
       <div className="side-toggle">
         <button className={side === "YES" ? "selected yes" : ""} onClick={() => setSide("YES")}><span>YES</span><strong>{Math.round(market.yesPrice * 100)}¢</strong></button>
         <button className={side === "NO" ? "selected no" : ""} onClick={() => setSide("NO")}><span>NO</span><strong>{Math.round((1 - market.yesPrice) * 100)}¢</strong></button>
@@ -289,7 +285,7 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
       </div>
       <button className="buy-button" onClick={executeTrade} disabled={tradeLoading || !isOpen}>
         <span>{tradeLoading ? "Executing order…" : !isOpen ? "Market closed" : session ? `Buy ${side} for ${money(numericAmount || 0)}` : "Sign in to buy"}</span>
-        <small>LMSR market · Demo credits</small>
+        <small>LMSR market · Instant execution</small>
       </button>
       {tradeError && <p className="trade-error" role="alert">{tradeError}</p>}
       {tradeResult && <p className="trade-success" role="status"><Check size={14} /> {tradeResult}</p>}
@@ -365,7 +361,7 @@ function Portfolio({ openMarket, openAuth, navigate }) {
       <div className="auth-gate-mark"><Wallet size={24} /></div>
       <span className="section-kicker">Your market view</span>
       <h1>Sign in to see your portfolio.</h1>
-      <p>Your positions, demo balance, and market history will stay connected to your account.</p>
+      <p>Your positions, balance, and market history stay connected to your account.</p>
       <button onClick={openAuth}>Sign in to continue <ArrowRight size={17} /></button>
     </main>
   );
@@ -380,18 +376,18 @@ function Portfolio({ openMarket, openAuth, navigate }) {
 
   return (
     <main className="portfolio-page page-shell">
-      <div className="portfolio-head"><span className="section-kicker"><Wallet size={15} /> Your account</span><h1>Portfolio</h1><p>A simple view of your demo-market positions.</p></div>
-      <button className="add-credits-button" onClick={() => navigate("/credits")}>Add demo credits <ArrowRight size={16} /></button>
+      <div className="portfolio-head"><span className="section-kicker"><Wallet size={15} /> Your account</span><h1>Portfolio</h1><p>Track your balance and open market positions.</p></div>
+      <button className="add-credits-button" onClick={() => navigate("/credits")}>Add credits <ArrowRight size={16} /></button>
       <div className="balance-grid">
-        <div className="balance-card primary"><span>Available balance</span><strong>{profile ? money(Number(profile.demo_balance)) : "—"}</strong><small>Demo credits</small></div>
-        <div className="balance-card"><span>Positions value</span><strong>{money(positionsValue)}</strong><small>Sandbox positions</small></div>
+        <div className="balance-card primary"><span>Available balance</span><strong>{profile ? money(Number(profile.demo_balance)) : "—"}</strong><small>Credits</small></div>
+        <div className="balance-card"><span>Positions value</span><strong>{money(positionsValue)}</strong><small>Open positions</small></div>
         <div className="balance-card"><span>Markets traded</span><strong>{new Set(savedPositions.map((position) => position.market_id)).size}</strong><small>{savedPositions.length} open positions</small></div>
       </div>
       <section className="positions-section"><h2>Positions</h2>
         <div className="positions-table">
           {portfolioLoading && <LoaderScreen />}
           {portfolioError && <p className="trade-error" role="alert">{portfolioError}</p>}
-          {!portfolioLoading && !portfolioError && savedPositions.length === 0 && <p className="portfolio-empty">Your completed demo purchases will appear here.</p>}
+          {!portfolioLoading && !portfolioError && savedPositions.length === 0 && <p className="portfolio-empty">Your completed purchases will appear here.</p>}
           {savedPositions.map((position) => {
             const yesPrice = Number(position.markets.yes_price);
             const currentPrice = position.markets.status === "resolved"
@@ -439,21 +435,20 @@ function CreditStore({ openAuth, navigate }) {
   return (
     <main className="credits-page page-shell">
       <button className="back-link" onClick={() => navigate("/portfolio")}><ArrowLeft size={16} /> Portfolio</button>
-      <span className="section-kicker"><Wallet size={15} /> Demo-credit wallet</span>
+      <span className="section-kicker"><Wallet size={15} /> Credit wallet</span>
       <h1>Top up your trading balance.</h1>
-      <p className="credits-lede">Stripe runs in Sandbox mode. Every $1 of test payment adds 100 demo credits with no cash value.</p>
+      <p className="credits-lede">Choose a credit pack and continue to secure checkout.</p>
       <div className="credit-packs">
         {packs.map((amount) => (
           <button key={amount} onClick={() => startCheckout(amount)} disabled={checkoutAmount != null}>
             <span>{(amount * 100).toLocaleString()}</span>
-            <small>demo credits</small>
-            <strong>{checkoutAmount === amount ? "Opening Stripe…" : `$${amount} sandbox`}</strong>
+            <small>credits</small>
+            <strong>{checkoutAmount === amount ? "Opening checkout…" : `$${amount}`}</strong>
           </button>
         ))}
       </div>
       {!session && <p className="credit-notice">Sign in before purchasing credits.</p>}
       {error && <p className="trade-error" role="alert">{error}</p>}
-      <p className="credit-disclaimer">These credits are for the hackathon demo only. They cannot be withdrawn, transferred, or redeemed for money.</p>
     </main>
   );
 }
@@ -462,9 +457,9 @@ function CreditResult({ success, navigate }) {
   return (
     <main className="auth-gate page-shell">
       <div className="auth-gate-mark">{success ? <Check size={24} /> : <X size={24} />}</div>
-      <span className="section-kicker">Demo-credit wallet</span>
+      <span className="section-kicker">Credit wallet</span>
       <h1>{success ? "Credits purchased." : "Checkout canceled."}</h1>
-      <p>{success ? "Stripe accepted the sandbox payment. Your balance updates as soon as the signed webhook is processed." : "Your demo-credit balance was not changed."}</p>
+      <p>{success ? "Payment received. Your balance updates as soon as the transaction is processed." : "Your credit balance was not changed."}</p>
       <button onClick={() => navigate(success ? "/portfolio" : "/credits")}>{success ? "View balance" : "Return to credit packs"} <ArrowRight size={17} /></button>
     </main>
   );
@@ -472,21 +467,6 @@ function CreditResult({ success, navigate }) {
 
 function LoaderScreen() {
   return <div className="loader-screen"><LoaderCircle className="spin" size={24} /><span>Restoring your session</span></div>;
-}
-
-function About() {
-  return (
-    <main className="about-page page-shell">
-      <span className="section-kicker"><Sparkles size={15} /> Prediction markets, native to conversation</span>
-      <h1>A clearer way to ask:<br /><em>what happens next?</em></h1>
-      <p className="about-lede">xmarket turns claims and debates on X into clear, tradable questions. Follow the crowd—or put your own conviction behind an answer.</p>
-      <div className="steps-grid">
-        <div><span>01</span><h2>Find the market</h2><p>Find a market born from a conversation already happening on X.</p></div>
-        <div><span>02</span><h2>Choose a side</h2><p>Buy YES or NO shares. The price reflects the market's current probability.</p></div>
-        <div><span>03</span><h2>Follow the outcome</h2><p>If your side is right when the market resolves, each winning share pays $1.</p></div>
-      </div>
-    </main>
-  );
 }
 
 function getExtensionConnectRequest() {
@@ -674,7 +654,7 @@ function App() {
   };
 
   const creditResult = path === "/credits/success" ? true : path === "/credits/cancel" ? false : null;
-  const page = path === "/extension-auth" ? "extension-auth" : creditResult != null ? "credit-result" : path === "/credits" ? "credits" : marketId ? "market" : path === "/portfolio" ? "portfolio" : path === "/about" ? "about" : "home";
+  const page = path === "/extension-auth" ? "extension-auth" : creditResult != null ? "credit-result" : path === "/credits" ? "credits" : marketId ? "market" : path === "/portfolio" ? "portfolio" : "home";
   const openMarket = (id) => navigate(`/market/${id}`);
   return (
     <>
@@ -686,10 +666,8 @@ function App() {
       {page === "portfolio" && <Portfolio openMarket={openMarket} openAuth={() => setAuthOpen(true)} navigate={navigate} />}
       {page === "credits" && <CreditStore openAuth={() => setAuthOpen(true)} navigate={navigate} />}
       {page === "credit-result" && <CreditResult success={creditResult} navigate={navigate} />}
-      {page === "about" && <About />}
       {page === "extension-auth" && <ExtensionAuth openAuth={() => setAuthOpen(true)} />}
       {page === "home" && <Home markets={markets} loading={marketsLoading} error={marketsError} openMarket={openMarket} retry={loadMarketList} />}
-      <footer><Logo onClick={() => navigate("/")} /><p>Markets for the conversations shaping tomorrow.</p><span>Built for the xAI Hackathon · 2026</span></footer>
       <AuthModal open={authOpen && !session} onClose={() => setAuthOpen(false)} />
     </>
   );

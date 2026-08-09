@@ -38,7 +38,7 @@ export function AuthModal({ open, onClose }) {
     <div className="auth-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <button className="auth-close" onClick={onClose} aria-label="Close sign in"><X size={19} /></button>
-        <div className="auth-brand-mark">↗</div>
+        <div className="auth-brand-mark">𝕏</div>
         <span className="section-kicker">Join the market</span>
         <h2 id="auth-title">Make your take count.</h2>
         <p>Sign in to build a portfolio, track your positions, and trade from conversations on X.</p>
@@ -68,7 +68,6 @@ export function AuthModal({ open, onClose }) {
           </>
         )}
         {error && <p className="auth-error" role="alert">{error}</p>}
-        <small className="auth-terms">By continuing, you agree this is a demo experience using non-monetary credits.</small>
       </section>
     </div>
   );
