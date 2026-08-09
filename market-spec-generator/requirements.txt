@@ -1,0 +1,13 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+openai==1.59.6
+numpy==2.2.1
+python-dotenv==1.0.1
+# Only needed to RUN migrations (DDL); the Supabase backend itself uses httpx.
+psycopg[binary]==3.2.3
+httpx==0.28.1
+
+# dev
+pytest==8.3.4
+pytest-asyncio==0.25.0

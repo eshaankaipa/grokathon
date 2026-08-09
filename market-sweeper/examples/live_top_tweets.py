@@ -58,60 +58,66 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-def _to_question(canonical: str | None, fallback: str) -> str:
-    if not canonical:
-        return fallback if fallback.endswith("?") else f"Will {fallback}?"
-    canonical = str(canonical).strip()
-    if not canonical:
-        return fallback if fallback.endswith("?") else f"Will {fallback}?"
-    if canonical.endswith("?"):
-        return canonical[0].upper() + canonical[1:]
-    return f"Will {canonical}?"
-
-
-def _create_market(sc, api_base: str = "https://xpred.aidenhuang.com") -> None:
+def _call_spec_generator(
+    sc,
+    spec_url: str = os.environ.get("SPEC_GENERATOR_URL", "http://localhost:8000"),
+) -> None:
     admin_token = os.environ.get("XPRED_ADMIN_TOKEN")
     if not admin_token:
-        print("  [CREATE] XPRED_ADMIN_TOKEN not set; cannot create market.")
+        print("  [CREATE] XPRED_ADMIN_TOKEN not set; cannot call market-spec-generator.")
         return
 
-    r = sc.classification_result
     ct = sc.candidate_topic
-    question = _to_question(r.canonical_event, ct.topic_name)
-    description = (
-        (sc.topic_context.summary if sc.topic_context else None)
-        or r.semantic_features.reasoning_summary
-        or "Auto-generated from X trends."
-    )
-    resolve_by = int(time.time()) + 7 * 24 * 3600
+    posts = ct.representative_posts or []
+    tweets = [
+        {
+            "id": f"{ct.topic_id}-{i}",
+            "text": text,
+            "author": None,
+            "created_at": None,
+            "likes": 0,
+            "reposts": 0,
+            "replies": 0,
+            "views": 0,
+        }
+        for i, text in enumerate(posts)
+    ]
+    if not tweets:
+        print("  [CREATE] no tweets to send to spec generator; skipping.")
+        return
 
     payload = {
-        "question": question,
-        "description": description,
-        "rules": "Resolves based on authoritative public sources.",
-        "liquidity": 100,
-        "resolve_by": resolve_by,
+        "cluster": {
+            "cluster_id": ct.topic_id,
+            "topic": sc.topic_seed.name,
+            "tweets": tweets,
+        },
+        "dry_run": False,
     }
 
     try:
         resp = requests.post(
-            f"{api_base}/markets",
+            f"{spec_url}/ingest",
             headers={
                 "Authorization": f"Bearer {admin_token}",
                 "Content-Type": "application/json",
             },
             json=payload,
-            timeout=30,
+            timeout=120,
         )
         data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else None
-        if resp.ok and data and data.get("ok") and data.get("market"):
-            market = data["market"]
-            slug = market.get("slug")
-            print(f"  [CREATE] -> https://xmarket.aidenhuang.com/market/{slug}")
+        if resp.ok and data:
+            decision = data.get("decision")
+            if decision == "CREATE" and data.get("market"):
+                market = data["market"]
+                market_id = market.get("id")
+                print(f"  [CREATE] -> https://xmarket.aidenhuang.com/market/{market_id}")
+            else:
+                print(f"  [CREATE] spec generator returned: {decision} ({data.get('reason', 'no reason')})")
         else:
-            print(f"  [CREATE] market creation failed ({resp.status_code}): {data or resp.text}")
+            print(f"  [CREATE] spec generator failed ({resp.status_code}): {data or resp.text}")
     except Exception as e:
-        print(f"  [CREATE] error creating market: {e}")
+        print(f"  [CREATE] error calling spec generator: {e}")
 
 
 async def _run_once() -> None:
@@ -200,7 +206,7 @@ async def _run_once() -> None:
                 f"(posts={ct.post_count}, score={r.score:.2f}, query={r.query})"
             )
             if label == "CREATE":
-                _create_market(sc)
+                _call_spec_generator(sc)
 
 
 async def main() -> None:

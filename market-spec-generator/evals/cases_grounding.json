@@ -1,0 +1,87 @@
+{
+  "_comment": "Does the pipeline notice when a market's date isn't actually in the source posts? `expect_supported` is the ground truth. The hard cases are the last two: a date absent from the posts but genuinely public knowledge (should pass) versus one the model would have to invent (should fail).",
+
+  "cases": [
+    {
+      "name": "date stated outright",
+      "expect_supported": true,
+      "expect_date_support": "explicit",
+      "resolution_date": "2026-08-08",
+      "event": "Golden State Warriors vs Los Angeles Lakers, Aug 8 2026",
+      "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+      "tweets": [
+        "Lakers at Warriors on August 8, 2026. Curry questionable.",
+        "Chase Center, August 8 2026. Big one."
+      ]
+    },
+    {
+      "name": "date stated in slashed form",
+      "expect_supported": true,
+      "expect_date_support": "explicit",
+      "resolution_date": "2026-11-18",
+      "event": "NVIDIA Q3 FY2027 earnings",
+      "entities": ["NVIDIA"],
+      "tweets": ["NVDA reports 11/18/2026 after the bell."]
+    },
+    {
+      "name": "relative timing only",
+      "expect_supported": true,
+      "expect_date_support": "relative",
+      "resolution_date": "2026-08-09",
+      "event": "Golden State Warriors vs Los Angeles Lakers",
+      "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+      "tweets": ["Lakers at Warriors tomorrow night, tip-off at 7."]
+    },
+    {
+      "name": "no timing information at all",
+      "note": "The classic invented date — nothing in the posts pins a day.",
+      "expect_supported": false,
+      "expect_date_support": "absent",
+      "resolution_date": "2026-09-15",
+      "event": "Golden State Warriors vs Los Angeles Lakers, Sep 15 2026",
+      "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+      "tweets": [
+        "The Warriors and Lakers rivalry is the best in basketball right now",
+        "Curry vs LeBron never gets old honestly"
+      ]
+    },
+    {
+      "name": "posts name a different date",
+      "expect_supported": false,
+      "expect_date_support": "mismatch",
+      "resolution_date": "2026-08-08",
+      "event": "Golden State Warriors vs Los Angeles Lakers, Aug 8 2026",
+      "entities": ["Golden State Warriors", "Los Angeles Lakers"],
+      "tweets": ["Warriors host the Lakers on September 20, 2026 per the schedule release."]
+    },
+    {
+      "name": "speculative event stated as scheduled",
+      "expect_supported": false,
+      "resolution_date": "2026-10-01",
+      "event": "Apple announces foldable iPhone at October 2026 event",
+      "entities": ["Apple"],
+      "tweets": [
+        "Rumours swirling that Apple might do a foldable at some point",
+        "Would be cool if they announced it this year but who knows"
+      ]
+    },
+    {
+      "name": "invented threshold",
+      "expect_supported": false,
+      "resolution_date": "2026-12-31",
+      "event": "Bitcoin closes above $250,000 on December 31, 2026",
+      "entities": ["Bitcoin"],
+      "tweets": ["Bitcoin is having a strong year, lots of momentum into Q4"]
+    },
+    {
+      "name": "fixed public event, date not in posts",
+      "note": "Hard case the other way: the date is absent from the text but genuinely well known, so the evidence check should let it through.",
+      "expect_supported": true,
+      "expect_date_support": "absent",
+      "resolution_date": "2027-01-01",
+      "event": "New Year's Day 2027",
+      "entities": ["New Year's Day"],
+      "tweets": ["Everyone already planning their New Year's Day 2027 resolutions lol"]
+    }
+  ]
+}
