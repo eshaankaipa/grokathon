@@ -420,10 +420,10 @@ export async function processMentionsBatch(
 export function formatMarketReply(result: MentionMarketResult): string | null {
   if (!result.market_id || !result.url) return null;
   if (result.action === "created") {
-    return `Market open: ${result.question}\n\nTrade: ${result.url}\nCard: ${result.og_image}`;
+    return `Market open: ${result.question}\n\nTrade: ${result.url}`;
   }
   if (result.action === "redirected") {
-    return `That market already exists — jump in:\n${result.url}\n${result.og_image}`;
+    return `That market already exists — jump in:\n${result.url}`;
   }
   return null;
 }
