@@ -25,11 +25,13 @@ export interface UserPublic {
 
 export interface Market {
   id: string;
+  slug: string;
   question: string;
   description: string | null;
   status: MarketStatus;
-  yes_pool: number;
-  no_pool: number;
+  yes_shares: number;
+  no_shares: number;
+  liquidity_parameter: number;
   resolution: Resolution | null;
   resolve_by: number | null;
   created_by: string | null;
@@ -79,24 +81,6 @@ export type Ok<T> = { ok: true } & T;
 export type Err = { ok: false; error: string };
 export type Result<T> = Ok<T> | Err;
 
-export interface AmmBuyResult {
-  shares_out: number;
-  new_yes: number;
-  new_no: number;
-  avg_price: number;
-  p_yes_before: number;
-  p_yes_after: number;
-}
-
-export interface AmmSellResult {
-  credits_out: number;
-  new_yes: number;
-  new_no: number;
-  avg_price: number;
-  p_yes_before: number;
-  p_yes_after: number;
-}
-
 export interface QuoteResult {
   side: QuoteSide;
   action: QuoteAction;
@@ -111,15 +95,15 @@ export interface TradeResult {
   trade: Trade;
   position: Position;
   balance: number;
-  market: { p_yes: number; p_no: number; yes_pool: number; no_pool: number };
+  market: MarketView;
 }
 
-const POOL_FLOOR = 1e-8;
 const DECIMALS = 8;
 const DEFAULT_LIQUIDITY = 100;
 const MIN_LIQUIDITY = 10;
 const DEFAULT_LIST_LIMIT = 50;
 const MAX_LIST_LIMIT = 100;
+const LMSR_EXP_LIMIT = 700;
 
 export function round8(n: number): number {
   if (!Number.isFinite(n)) return n;
@@ -140,65 +124,40 @@ export async function hashApiKey(rawKey: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function pYes(yesPool: number, noPool: number): number {
-  const sum = yesPool + noPool;
-  if (sum <= 0) return 0.5;
-  return noPool / sum;
+export function lmsrPrice(yesShares: number, noShares: number, b: number): number {
+  if (!(b > 0) || !Number.isFinite(yesShares) || !Number.isFinite(noShares)) return 0.5;
+  const x = (noShares - yesShares) / b;
+  const clamped = Math.max(-LMSR_EXP_LIMIT, Math.min(LMSR_EXP_LIMIT, x));
+  return 1 / (1 + Math.exp(clamped));
 }
 
-export function pNo(yesPool: number, noPool: number): number {
-  return 1 - pYes(yesPool, noPool);
+export function lmsrBuyShares(yesShares: number, noShares: number, b: number, amount: number, outcome: "YES" | "NO"): number {
+  if (!(b > 0) || !Number.isFinite(amount) || !(amount > 0)) return NaN;
+  const price = lmsrPrice(yesShares, noShares, b);
+  const sidePrice = outcome === "YES" ? price : 1 - price;
+  if (!(sidePrice > 0) || !(sidePrice < 1)) return NaN;
+  const expAmount = Math.exp(amount / b);
+  const numerator = expAmount - (1 - sidePrice);
+  if (!(numerator > sidePrice) || !Number.isFinite(numerator)) return NaN;
+  const shares = b * Math.log(numerator / sidePrice);
+  return Number.isFinite(shares) && shares > 0 ? shares : NaN;
 }
 
-function enforcePoolFloor(n: number): number {
-  const r = round8(n);
-  return r < POOL_FLOOR ? POOL_FLOOR : r;
+function lmsrCost(qYes: number, qNo: number, b: number): number {
+  if (!(b > 0)) return 0;
+  const max = Math.max(qYes, qNo);
+  const sum = Math.exp((qYes - max) / b) + Math.exp((qNo - max) / b);
+  return max + b * Math.log(sum);
 }
 
-export function ammBuyYes(yesPool: number, noPool: number, amount: number): Result<AmmBuyResult> {
-  if (!(amount > 0) || !Number.isFinite(amount)) return { ok: false, error: "amount must be positive" };
-  if (yesPool <= 0 || noPool <= 0) return { ok: false, error: "invalid pools" };
-  const p_yes_before = pYes(yesPool, noPool);
-  const k = yesPool * noPool;
-  const new_no = noPool + amount;
-  const new_yes = k / new_no;
-  const shares_out = yesPool - new_yes;
-  if (!(shares_out > 0) || !Number.isFinite(shares_out)) return { ok: false, error: "shares too small" };
-  if (!(new_yes > 0) || !(new_no > 0)) return { ok: false, error: "pools would go non-positive" };
-  const ny = enforcePoolFloor(new_yes);
-  const nn = enforcePoolFloor(new_no);
-  const shares = round8(shares_out);
-  if (!(shares > 0)) return { ok: false, error: "shares too small" };
-  return { ok: true, shares_out: shares, new_yes: ny, new_no: nn, avg_price: round8(amount / shares), p_yes_before: round8(p_yes_before), p_yes_after: round8(pYes(ny, nn)) };
-}
-
-export function ammBuyNo(yesPool: number, noPool: number, amount: number): Result<AmmBuyResult> {
-  const r = ammBuyYes(noPool, yesPool, amount);
-  if (!r.ok) return r;
-  return { ok: true, shares_out: r.shares_out, new_yes: r.new_no, new_no: r.new_yes, avg_price: r.avg_price, p_yes_before: round8(pYes(yesPool, noPool)), p_yes_after: round8(pYes(r.new_no, r.new_yes)) };
-}
-
-export function ammSellYes(yesPool: number, noPool: number, shares: number): Result<AmmSellResult> {
-  if (!(shares > 0) || !Number.isFinite(shares)) return { ok: false, error: "shares must be positive" };
-  if (yesPool <= 0 || noPool <= 0) return { ok: false, error: "invalid pools" };
-  const p_yes_before = pYes(yesPool, noPool);
-  const k = yesPool * noPool;
-  const new_yes = yesPool + shares;
-  const new_no = k / new_yes;
-  const credits_out = noPool - new_no;
-  if (!(credits_out > 0) || !Number.isFinite(credits_out)) return { ok: false, error: "credits too small" };
-  if (!(new_yes > 0) || !(new_no > 0) || new_no < POOL_FLOOR) return { ok: false, error: "pools would go non-positive" };
-  const ny = enforcePoolFloor(new_yes);
-  const nn = enforcePoolFloor(new_no);
-  const credits = round8(credits_out);
-  if (!(credits > 0)) return { ok: false, error: "credits too small" };
-  return { ok: true, credits_out: credits, new_yes: ny, new_no: nn, avg_price: round8(credits / shares), p_yes_before: round8(p_yes_before), p_yes_after: round8(pYes(ny, nn)) };
-}
-
-export function ammSellNo(yesPool: number, noPool: number, shares: number): Result<AmmSellResult> {
-  const r = ammSellYes(noPool, yesPool, shares);
-  if (!r.ok) return r;
-  return { ok: true, credits_out: r.credits_out, new_yes: r.new_no, new_no: r.new_yes, avg_price: r.avg_price, p_yes_before: round8(pYes(yesPool, noPool)), p_yes_after: round8(pYes(r.new_no, r.new_yes)) };
+export function lmsrSellCredits(yesShares: number, noShares: number, b: number, shares: number, outcome: "YES" | "NO"): number {
+  if (!(b > 0) || !Number.isFinite(shares) || !(shares > 0)) return NaN;
+  const afterYes = outcome === "YES" ? yesShares - shares : yesShares;
+  const afterNo = outcome === "YES" ? noShares : noShares - shares;
+  const before = lmsrCost(yesShares, noShares, b);
+  const after = lmsrCost(afterYes, afterNo, b);
+  const credits = before - after;
+  return Number.isFinite(credits) && credits > 0 ? credits : NaN;
 }
 
 function toDbStatus(s: string): string {
@@ -239,11 +198,13 @@ function mapMarket(row: Record<string, unknown>): Market {
   }
   return {
     id: String(row.id),
+    slug: String(row.slug || row.id),
     question: String(row.question || ""),
     description: row.description == null || String(row.description) === "" ? null : String(row.description),
     status,
-    yes_pool: Number(row.yes_pool ?? 0),
-    no_pool: Number(row.no_pool ?? 0),
+    yes_shares: Number(row.yes_shares ?? 0),
+    no_shares: Number(row.no_shares ?? 0),
+    liquidity_parameter: Number(row.liquidity_parameter ?? DEFAULT_LIQUIDITY),
     resolution,
     resolve_by: row.closes_at ? Math.floor(new Date(String(row.closes_at)).getTime() / 1000) : null,
     created_by: row.creator_x_handle ? String(row.creator_x_handle) : "admin",
@@ -257,7 +218,7 @@ function mapMarket(row: Record<string, unknown>): Market {
 
 function toMarketViewRaw(row: Record<string, unknown>): MarketView {
   const m = mapMarket(row);
-  const py = round8(pYes(m.yes_pool, m.no_pool));
+  const py = round8(Number(row.yes_price ?? 0.5));
   return { ...m, p_yes: py, p_no: round8(1 - py), volume: Number(row.volume ?? 0) };
 }
 
@@ -289,14 +250,14 @@ function toListTrade(row: Record<string, unknown>): Trade {
   };
 }
 
-async function getMarketRow(env: SupabaseEnv, marketId: string): Promise<Market | null> {
+async function getMarketRow(env: SupabaseEnv, marketId: string): Promise<MarketView | null> {
   const { data, error } = await getSupabase(env)
     .from("markets")
     .select("*")
     .eq("id", marketId)
     .maybeSingle();
   if (error || !data) return null;
-  return mapMarket(data as Record<string, unknown>);
+  return toMarketViewRaw(data as Record<string, unknown>);
 }
 
 async function buildPosition(env: SupabaseEnv, userId: string, marketId: string): Promise<Position> {
@@ -372,7 +333,7 @@ export async function createMarket(
   const description = opts.description == null || opts.description === "" ? "" : String(opts.description);
   const rules = opts.rules == null || opts.rules === "" ? "Resolves based on publicly available information." : String(opts.rules);
   const closes_at = opts.resolve_by == null || !Number.isFinite(opts.resolve_by) ? undefined : new Date(Math.floor(opts.resolve_by * 1000)).toISOString();
-  const { data, error } = await getSupabase(env).rpc("create_market", {
+  const { data, error } = await getSupabase(env).rpc("create_market_api", {
     p_question: question,
     p_description: description,
     p_resolution_criteria: rules,
@@ -421,63 +382,20 @@ export async function resolveMarket(env: SupabaseEnv, marketId: string, outcome:
   if (outcome !== "yes" && outcome !== "no" && outcome !== "void") return { ok: false, error: "outcome must be yes, no, or void" };
   const supabase = getSupabase(env);
   if (outcome === "void") {
-    const { data, error } = await supabase.rpc("cancel_market", { p_market_id: marketId });
+    const { data, error } = await supabase.rpc("cancel_market_api", { p_market_id: marketId });
     if (error || !data) return { ok: false, error: error?.message || "cancel failed" };
     const row = data as Record<string, unknown>;
-    return { ok: true, market: toMarketViewRaw(row.market as Record<string, unknown>), payouts: Number(row.refunds ?? 0) };
+    const refunds = Array.isArray(row.refunds) ? row.refunds.length : 0;
+    const market = await getMarketRow(env, marketId);
+    if (!market) return { ok: false, error: "market disappeared" };
+    return { ok: true, market, payouts: refunds };
   }
-
-  // JS-based resolve (the resolve_market SQL has an enum/text mismatch).
-  const target = outcome.toUpperCase();
-  const { data: positions, error: posError } = await supabase
-    .from("positions")
-    .select("user_id, shares")
-    .eq("market_id", marketId)
-    .eq("outcome", target);
-  if (posError) return { ok: false, error: posError.message };
-
-  const updates: { user_id: string; shares: number }[] = (positions ?? []) as { user_id: string; shares: number }[];
-  const userIds = [...new Set(updates.map((p) => p.user_id))];
-
-  if (userIds.length > 0) {
-    const { data: profiles, error: profError } = await supabase
-      .from("profiles")
-      .select("id, demo_balance")
-      .in("id", userIds);
-    if (profError) return { ok: false, error: profError.message };
-    const balMap = new Map<string, number>();
-    for (const u of (profiles ?? []) as { id: string; demo_balance: number }[]) {
-      balMap.set(u.id, Number(u.demo_balance ?? 0));
-    }
-    for (const p of updates) {
-      const cur = balMap.get(p.user_id) ?? 0;
-      const { error: upError } = await supabase
-        .from("profiles")
-        .update({ demo_balance: cur + Number(p.shares) })
-        .eq("id", p.user_id);
-      if (upError) return { ok: false, error: upError.message };
-    }
-  }
-
-  const { error: delError } = await supabase.from("positions").delete().eq("market_id", marketId);
-  if (delError) return { ok: false, error: delError.message };
-
-  const now = new Date().toISOString();
-  const { data: m, error: upError } = await supabase
-    .from("markets")
-    .update({
-      status: "resolved",
-      outcome: target,
-      resolved_at: now,
-      yes_price: target === "YES" ? 0.9999 : 0.0001,
-      updated_at: now,
-    })
-    .eq("id", marketId)
-    .select("*")
-    .single();
-  if (upError || !m) return { ok: false, error: upError?.message || "resolve update failed" };
-
-  return { ok: true, market: toMarketViewRaw(m as Record<string, unknown>), payouts: userIds.length };
+  const { data, error } = await supabase.rpc("resolve_market_api", { p_market_id: marketId, p_outcome: outcome.toUpperCase() });
+  if (error || !data) return { ok: false, error: error?.message || "resolve failed" };
+  const row = data as Record<string, unknown>;
+  const market = await getMarketRow(env, marketId);
+  if (!market) return { ok: false, error: "market disappeared" };
+  return { ok: true, market, payouts: Number(row.winners ?? 0) };
 }
 
 export async function quote(
@@ -491,18 +409,35 @@ export async function quote(
   const { side, action } = opts;
   if (side !== "yes" && side !== "no") return { ok: false, error: "side must be yes or no" };
   if (action !== "buy" && action !== "sell") return { ok: false, error: "action must be buy or sell" };
+  const b = market.liquidity_parameter;
+  const yesShares = market.yes_shares;
+  const noShares = market.no_shares;
+  const p_yes_before = market.p_yes;
+  const outcome: "YES" | "NO" = side.toUpperCase() as "YES" | "NO";
   if (action === "buy") {
     const amount = Number(opts.amount);
     if (!(amount > 0)) return { ok: false, error: "amount is required for buy" };
-    const r = side === "yes" ? ammBuyYes(market.yes_pool, market.no_pool, amount) : ammBuyNo(market.yes_pool, market.no_pool, amount);
-    if (!r.ok) return r;
-    return { ok: true, side, action, amount: round8(amount), shares: r.shares_out, avg_price: r.avg_price, p_yes_before: r.p_yes_before, p_yes_after: r.p_yes_after };
+    const rawShares = lmsrBuyShares(yesShares, noShares, b, amount, outcome);
+    if (!Number.isFinite(rawShares) || !(rawShares > 0)) return { ok: false, error: "quote failed" };
+    const shares = round8(rawShares);
+    if (!(shares > 0)) return { ok: false, error: "shares too small" };
+    const afterYes = side === "yes" ? yesShares + rawShares : yesShares;
+    const afterNo = side === "yes" ? noShares : noShares + rawShares;
+    const p_yes_after = round8(lmsrPrice(afterYes, afterNo, b));
+    const avg_price = round8(amount / rawShares);
+    return { ok: true, side, action, amount: round8(amount), shares, avg_price, p_yes_before, p_yes_after };
   }
   const shares = Number(opts.shares);
   if (!(shares > 0)) return { ok: false, error: "shares is required for sell" };
-  const r = side === "yes" ? ammSellYes(market.yes_pool, market.no_pool, shares) : ammSellNo(market.yes_pool, market.no_pool, shares);
-  if (!r.ok) return r;
-  return { ok: true, side, action, amount: r.credits_out, shares: round8(shares), avg_price: r.avg_price, p_yes_before: r.p_yes_before, p_yes_after: r.p_yes_after };
+  const rawCredits = lmsrSellCredits(yesShares, noShares, b, shares, outcome);
+  if (!Number.isFinite(rawCredits) || !(rawCredits > 0)) return { ok: false, error: "quote failed" };
+  const credits = round8(rawCredits);
+  if (!(credits > 0)) return { ok: false, error: "credits too small" };
+  const afterYes = side === "yes" ? yesShares - shares : yesShares;
+  const afterNo = side === "yes" ? noShares : noShares - shares;
+  const p_yes_after = round8(lmsrPrice(afterYes, afterNo, b));
+  const avg_price = round8(rawCredits / shares);
+  return { ok: true, side, action, amount: credits, shares: round8(shares), avg_price, p_yes_before, p_yes_after };
 }
 
 export async function buy(env: SupabaseEnv, userId: string, marketId: string, side: QuoteSide, amount: number): Promise<Result<TradeResult>> {
@@ -511,16 +446,25 @@ export async function buy(env: SupabaseEnv, userId: string, marketId: string, si
   if (!(amount > 0) || !Number.isFinite(amount)) return { ok: false, error: "amount must be positive" };
   amount = round8(amount);
   const supabase = getSupabase(env);
-  const fn = side === "yes" ? "buy_yes" : "buy_no";
-  const { data, error } = await supabase.rpc(fn, { p_user_id: userId, p_market_id: marketId, p_amount: amount });
+  const market = await getMarketRow(env, marketId);
+  if (!market) return { ok: false, error: "market not found" };
+  const { data, error } = await supabase.rpc("buy_market_position_api", {
+    p_user_id: userId,
+    p_market_slug: market.slug,
+    p_outcome: side.toUpperCase(),
+    p_amount: amount,
+    p_client_order_id: crypto.randomUUID(),
+  });
   if (error || !data) return { ok: false, error: error?.message || "buy failed" };
   const row = data as Record<string, unknown>;
-  const market = toMarketViewRaw(row.market as Record<string, unknown>);
-  const trade = toTrade(row.trade as Record<string, unknown>, "buy", market.p_yes);
-  const position = await buildPosition(env, userId, marketId);
-  const { data: profile } = await supabase.from("profiles").select("demo_balance").eq("id", userId).single();
-  const balance = Number(profile?.demo_balance ?? 0);
-  return { ok: true, trade, position, balance, market: { p_yes: market.p_yes, p_no: market.p_no, yes_pool: market.yes_pool, no_pool: market.no_pool } };
+  const tradeId = String(row.trade_id ?? "");
+  if (!tradeId) return { ok: false, error: "trade missing" };
+  const { data: tradeRow } = await supabase.from("trades").select("*").eq("id", tradeId).single();
+  const marketView = await getMarketRow(env, marketId);
+  if (!marketView || !tradeRow) return { ok: false, error: "trade or market missing" };
+  const trade = toTrade(tradeRow as Record<string, unknown>, "buy", marketView.p_yes);
+  const position = await buildPosition(env, userId, marketView.id);
+  return { ok: true, trade, position, balance: Number(row.balance ?? 0), market: marketView };
 }
 
 export async function sell(env: SupabaseEnv, userId: string, marketId: string, side: QuoteSide, shares: number): Promise<Result<TradeResult>> {
@@ -529,16 +473,25 @@ export async function sell(env: SupabaseEnv, userId: string, marketId: string, s
   if (!(shares > 0) || !Number.isFinite(shares)) return { ok: false, error: "shares must be positive" };
   shares = round8(shares);
   const supabase = getSupabase(env);
-  const fn = side === "yes" ? "sell_yes" : "sell_no";
-  const { data, error } = await supabase.rpc(fn, { p_user_id: userId, p_market_id: marketId, p_shares: shares });
+  const market = await getMarketRow(env, marketId);
+  if (!market) return { ok: false, error: "market not found" };
+  const { data, error } = await supabase.rpc("sell_market_position_api", {
+    p_user_id: userId,
+    p_market_slug: market.slug,
+    p_outcome: side.toUpperCase(),
+    p_shares: shares,
+    p_client_order_id: crypto.randomUUID(),
+  });
   if (error || !data) return { ok: false, error: error?.message || "sell failed" };
   const row = data as Record<string, unknown>;
-  const market = toMarketViewRaw(row.market as Record<string, unknown>);
-  const trade = toTrade(row.trade as Record<string, unknown>, "sell", market.p_yes);
-  const position = await buildPosition(env, userId, marketId);
-  const { data: profile } = await supabase.from("profiles").select("demo_balance").eq("id", userId).single();
-  const balance = Number(profile?.demo_balance ?? 0);
-  return { ok: true, trade, position, balance, market: { p_yes: market.p_yes, p_no: market.p_no, yes_pool: market.yes_pool, no_pool: market.no_pool } };
+  const tradeId = String(row.trade_id ?? "");
+  if (!tradeId) return { ok: false, error: "trade missing" };
+  const { data: tradeRow } = await supabase.from("trades").select("*").eq("id", tradeId).single();
+  const marketView = await getMarketRow(env, marketId);
+  if (!marketView || !tradeRow) return { ok: false, error: "trade or market missing" };
+  const trade = toTrade(tradeRow as Record<string, unknown>, "sell", marketView.p_yes);
+  const position = await buildPosition(env, userId, marketView.id);
+  return { ok: true, trade, position, balance: Number(row.balance ?? 0), market: marketView };
 }
 
 export async function getPositions(env: SupabaseEnv, userId: string): Promise<Result<{ positions: PositionView[] }>> {
