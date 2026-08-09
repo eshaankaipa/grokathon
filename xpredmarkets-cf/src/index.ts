@@ -356,6 +356,8 @@ export default {
         liquidity?: number;
         force_create?: boolean;
         announce?: boolean;
+        in_reply_to_user_id?: string;
+        conversation_id?: string;
       }>(request);
       if (!parsed.ok) return parsed.response;
       const b = parsed.body;
@@ -373,6 +375,10 @@ export default {
 
       // Prefer Grok binary gate whenever XAI is configured; never force-create open-ended.
       const useGrok = Boolean(env.XAI_API_KEY && String(env.XAI_API_KEY).trim());
+      const replyMeta = {
+        in_reply_to_user_id: b.in_reply_to_user_id,
+        conversation_id: b.conversation_id,
+      };
 
       const result = useGrok
         ? env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
@@ -384,6 +390,7 @@ export default {
               botUsername,
               botUserId,
               liquidity: b.liquidity,
+              ...replyMeta,
             })
           : await processMentionWithGate(env, {
               text: b.text,
@@ -394,6 +401,7 @@ export default {
               botUserId,
               liquidity: b.liquidity,
               force_create: b.force_create,
+              ...replyMeta,
             })
         : await processMentionToMarket(env, {
             text: b.text,
@@ -404,6 +412,7 @@ export default {
             botUserId,
             liquidity: b.liquidity,
             force_create: b.force_create,
+            ...replyMeta,
           });
       if (!result.ok) return resultJson(result);
 
@@ -411,8 +420,8 @@ export default {
       void _ok;
 
       let announcement: unknown;
-      // Announce creates, redirects, AND helpful skip/clarify replies with suggestions
-      if (b.announce && creds) {
+      // Announce creates / redirects / clarify suggestions — never silent skips
+      if (b.announce && creds && !payload.silent) {
         const reply = formatMarketReply(payload);
         if (reply && b.tweet_id) {
           const posted = await xCreateTweet(creds, reply, b.tweet_id);
@@ -515,8 +524,8 @@ export default {
       if (announce) {
         for (const r of batch.results) {
           if (!r.tweet_id) continue;
-          // Don't re-announce already-processed tweets
-          if (r.already_processed) continue;
+          // Don't re-announce already-processed tweets or silent skips
+          if (r.already_processed || r.silent) continue;
           const text = formatMarketReply(r);
           if (!text) continue;
           const posted = await xCreateTweet(creds, text, r.tweet_id);

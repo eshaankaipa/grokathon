@@ -188,3 +188,145 @@ export function filterBinarySuggestions(suggestions: string[]): string[] {
   }
   return out.slice(0, 3);
 }
+
+// --------------------------------------------------------------------------- #
+// Intent / conversation filters — stop bot from jumping on casual replies
+// --------------------------------------------------------------------------- #
+
+/** Explicit "please make a market" style commands. */
+const MARKET_COMMAND =
+  /\b((create|open|make|start|new)\s+(a\s+)?(market|prediction|bet)|prediction\s*market|trade\s+on|odds\s+on)\b/i;
+
+/** Conversational praise / filler that is never a market request. */
+const CONVERSATIONAL_NOISE =
+  /^(?:(?:oh|ah|wow|yo|hey|hi|hello|gm|gn)\s+)?(?:(?:very|so|super|really)\s+)?(?:nice|cool|awesome|amazing|great|love|sick|dope|fire|lit|based|interesting|impressive|incredible|fantastic|excellent|good|solid|clean)(?:\s+(?:project|work|job|bot|one|stuff|post|idea|demo|app|product))?[!.,\s]*$|^thanks?(?:\s+you)?[!.,\s]*$|^(?:ty|thx|tysm|lfg|let'?s go|congrats|congratulations|well done|good (?:job|work)|this is (?:cool|sick|dope|awesome|amazing|great)|love (?:this|it)|big fan)[!.,\s]*$/i;
+
+const PRAISE_PHRASE =
+  /\b(nice project|cool project|great (?:project|work|job|bot)|love (?:this|the project|the bot|it)|awesome (?:project|work|bot)|well done|congrats|congratulations|so cool|this is (?:cool|sick|dope|awesome|amazing)|good (?:job|work)|big fan)\b/i;
+
+/**
+ * True when the text is clearly trying to open/trade a market
+ * (command words, or an already-binary yes/no question).
+ */
+export function hasMarketIntent(
+  text: string,
+  botUsername = "XPredMarkets",
+): boolean {
+  const raw = (text ?? "").trim();
+  if (!raw) return false;
+
+  if (MARKET_COMMAND.test(raw)) return true;
+  if (/\bmkt_[a-f0-9]{16,}\b/i.test(raw)) return true;
+  if (
+    /(?:xmarket|xpred)\.[^\s]+\/market\//i.test(raw) ||
+    /xpred\.aidenhuang\.com\/markets\//i.test(raw)
+  ) {
+    return true;
+  }
+
+  const cleaned = cleanMentionText(raw, botUsername);
+  if (!cleaned) return false;
+
+  // Already a yes/no question form
+  if (looksBinaryQuestion(cleaned)) return true;
+  if (cleaned.endsWith("?") && YES_NO_OPENER.test(cleaned)) return true;
+
+  // "will X happen" without ? still counts as intent
+  if (YES_NO_OPENER.test(cleaned) && cleaned.length >= 12) return true;
+
+  // Open-ended but clearly about a future outcome (we'll CLARIFY, not silent-skip)
+  if (
+    looksOpenEnded(cleaned) &&
+    /\b(win|wins|won|happen|announce|elected?|pass(?:es|ed)?|release|launch|close|price|score)\b/i.test(
+      cleaned,
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Casual chat / praise — never create a market, never reply with suggestions. */
+export function isConversationalNoise(
+  text: string,
+  botUsername = "XPredMarkets",
+): boolean {
+  const cleaned = cleanMentionText(text, botUsername);
+  if (!cleaned) return true;
+
+  // If they clearly want a market, not noise
+  if (hasMarketIntent(text, botUsername)) return false;
+
+  if (CONVERSATIONAL_NOISE.test(cleaned)) return true;
+  if (PRAISE_PHRASE.test(cleaned) && cleaned.length <= 80) return true;
+
+  // Very short non-question replies with no market words
+  if (cleaned.length <= 40 && !cleaned.includes("?") && !MARKET_COMMAND.test(text)) {
+    // single short utterance without predictive structure
+    if (!YES_NO_OPENER.test(cleaned) && !looksOpenEnded(cleaned)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+export type MentionIntentDecision =
+  | { process: true }
+  | { process: false; reason: string; silent: true };
+
+/**
+ * Decide whether a mention should enter the market pipeline at all.
+ *
+ * Replies in a thread (especially not directed at the bot) are ignored unless
+ * they show clear market intent — stops "oh nice project" under a promo tweet
+ * from spawning a market + bot reply.
+ */
+export function evaluateMentionIntent(
+  text: string,
+  opts?: {
+    botUsername?: string;
+    botUserId?: string;
+    /** X in_reply_to_user_id — set when this tweet is a reply */
+    inReplyToUserId?: string | null;
+    /** X conversation_id — equals tweet id for root posts */
+    conversationId?: string | null;
+    tweetId?: string | null;
+  },
+): MentionIntentDecision {
+  const botUsername = opts?.botUsername ?? "XPredMarkets";
+  const botUserId = opts?.botUserId?.trim();
+  const inReplyTo = opts?.inReplyToUserId?.trim() || null;
+  const conversationId = opts?.conversationId?.trim() || null;
+  const tweetId = opts?.tweetId?.trim() || null;
+
+  if (isConversationalNoise(text, botUsername)) {
+    return {
+      process: false,
+      silent: true,
+      reason: "conversational reply — no market intent",
+    };
+  }
+
+  const isReply =
+    Boolean(inReplyTo) ||
+    Boolean(conversationId && tweetId && conversationId !== tweetId);
+
+  if (isReply) {
+    const replyToBot = Boolean(botUserId && inReplyTo && inReplyTo === botUserId);
+    const intent = hasMarketIntent(text, botUsername);
+
+    if (!intent) {
+      return {
+        process: false,
+        silent: true,
+        reason: replyToBot
+          ? "reply to bot without market intent"
+          : "thread reply without market intent (not directed as a market request)",
+      };
+    }
+  }
+
+  return { process: true };
+}
