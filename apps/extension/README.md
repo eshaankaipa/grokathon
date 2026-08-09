@@ -27,15 +27,14 @@ npm run build
 
 Then open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/dist`.
 
-Open the extension popup to change the canonical market origin. The default is `http://localhost:5175`.
+The canonical market origin and Supabase publishable configuration live in `src/config.js`. The default market origin is `http://localhost:5175`.
 
 ## Account setup
 
 The extension opens the xmarket website through `chrome.identity.launchWebAuthFlow`. After explicit confirmation, the signed-in website creates a short-lived, single-use token that the extension exchanges for its own Supabase session.
 
-1. Enter the Supabase project URL and publishable key in the extension's development settings.
-2. Set the Market website to the running or deployed xmarket web origin.
-3. Click **Continue on website** and approve the connection.
+1. Set the Supabase project URL, publishable key, and market website in `src/config.js`, then rebuild the extension.
+2. Click **Continue on website** and approve the connection.
 
 Email/password authentication remains available in the popup as a fallback.
 

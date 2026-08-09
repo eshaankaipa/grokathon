@@ -324,3 +324,117 @@ footer > span { font-family: inherit; letter-spacing: 0; text-transform: none; }
   .credit-packs { grid-template-columns: 1fr 1fr; }
   footer { padding-left: 18px; padding-right: 18px; }
 }
+
+/* Theme switching --------------------------------------------------------- */
+html { background: #fff; }
+body, .site-header, .market-card, .trade-panel, .balance-card, .credit-packs button, .auth-modal { transition: background-color .2s ease, border-color .2s ease, color .2s ease; }
+.theme-toggle svg { transition: transform .2s ease; }
+.theme-toggle:hover svg { transform: rotate(-10deg); }
+input { color: inherit; }
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: #000;
+  --ink: #e7e9ea;
+  --muted: #71767b;
+  --paper: #000;
+  --card: #000;
+  --line: #2f3336;
+  --lime: #eff3f4;
+  --action: #eff3f4;
+  --action-hover: #d7dbdc;
+  --action-wash: #16181c;
+}
+
+html[data-theme="dark"] body { background: #000; color: #e7e9ea; }
+html[data-theme="dark"] button:focus-visible,
+html[data-theme="dark"] input:focus-visible { outline-color: rgba(239,243,244,.55); }
+html[data-theme="dark"] .site-header { background: rgba(0,0,0,.92); border-color: #2f3336; }
+html[data-theme="dark"] .logo-mark { color: #f2f2f2; }
+html[data-theme="dark"] .desktop-nav button:hover,
+html[data-theme="dark"] .icon-button:hover,
+html[data-theme="dark"] .balance-pill:hover,
+html[data-theme="dark"] .account-menu button:hover,
+html[data-theme="dark"] .mobile-nav button:hover { background: #181818; }
+html[data-theme="dark"] .icon-button,
+html[data-theme="dark"] .balance-pill { border-color: #2f3336; background: #000; }
+html[data-theme="dark"] .sign-in-button { background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .sign-in-button:hover { background: #d7dbdc; }
+html[data-theme="dark"] .avatar { background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .account-menu { border-color: #2f3336; background: #000; box-shadow: 0 0 15px rgba(255,255,255,.08), 0 0 3px 1px rgba(255,255,255,.08); }
+html[data-theme="dark"] .account-menu > div { border-color: #2f3336; }
+html[data-theme="dark"] .mobile-nav { border-color: #2f3336; background: #000; }
+
+html[data-theme="dark"] .hero-search { background: #202327; color: #e7e9ea; }
+html[data-theme="dark"] .hero-search:focus-within { border-color: #eff3f4; background: #000; box-shadow: 0 0 0 1px #eff3f4; }
+html[data-theme="dark"] .ticker-strip { border-color: #2f3336; background: #000; }
+html[data-theme="dark"] .ticker-strip button { border-color: #2f3336; }
+html[data-theme="dark"] .ticker-strip button:hover { background: #080808; }
+html[data-theme="dark"] .tabs button:hover { background: #181818; }
+html[data-theme="dark"] .market-grid { border-color: #2f3336; background: #000; }
+html[data-theme="dark"] .market-card { border-color: #2f3336; background: #000; }
+html[data-theme="dark"] .market-card:hover { background: #080808; }
+html[data-theme="dark"] .category { background: #16181c; color: #a8b3ba; }
+html[data-theme="dark"] .card-footer button:hover { background: #181818; }
+html[data-theme="dark"] .empty-state { border-color: #536471; }
+html[data-theme="dark"] .conversation-banner { border: 1px solid #2f3336; background: #16181c; }
+html[data-theme="dark"] .x-prompt { border-color: #536471; background: #000; }
+
+html[data-theme="dark"] .chart-card,
+html[data-theme="dark"] .market-stats,
+html[data-theme="dark"] .source-context,
+html[data-theme="dark"] .trade-panel,
+html[data-theme="dark"] .balance-card,
+html[data-theme="dark"] .positions-table,
+html[data-theme="dark"] .credit-packs button { border-color: #536471; background: #000; }
+html[data-theme="dark"] .chart-base { stroke: #2f3336; }
+html[data-theme="dark"] .market-stats div,
+html[data-theme="dark"] .rules-card,
+html[data-theme="dark"] .order-summary,
+html[data-theme="dark"] .order-summary .potential,
+html[data-theme="dark"] .position-row { border-color: #2f3336; }
+html[data-theme="dark"] .source-context a { color: #e7e9ea; }
+html[data-theme="dark"] .change-badge { background: rgba(0,186,124,.14); }
+html[data-theme="dark"] .side-toggle button { border-color: #536471; background: #000; }
+html[data-theme="dark"] .side-toggle button.selected.yes { background: rgba(0,186,124,.13); }
+html[data-theme="dark"] .side-toggle button.selected.no { background: rgba(244,33,46,.13); }
+html[data-theme="dark"] .amount-input,
+html[data-theme="dark"] .quick-amounts button { border-color: #536471; background: #000; }
+html[data-theme="dark"] .amount-input:focus-within { border-color: #eff3f4; box-shadow: 0 0 0 1px #eff3f4; }
+html[data-theme="dark"] .quick-amounts button:hover { background: #181818; }
+html[data-theme="dark"] .quick-amounts button.active,
+html[data-theme="dark"] .buy-button,
+html[data-theme="dark"] .add-credits-button { border-color: #eff3f4; background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .buy-button:hover:not(:disabled),
+html[data-theme="dark"] .add-credits-button:hover { background: #d7dbdc; }
+html[data-theme="dark"] .buy-button small { color: #536471; }
+html[data-theme="dark"] .trade-success { color: #6ee7b7; background: rgba(0,186,124,.13); }
+html[data-theme="dark"] .trade-error,
+html[data-theme="dark"] .auth-error { color: #ff8b94 !important; background: rgba(244,33,46,.13); }
+
+html[data-theme="dark"] .balance-card.primary { border-color: #536471; background: #16181c; }
+html[data-theme="dark"] .position-row:hover { background: #080808; }
+html[data-theme="dark"] .position-side.yes { background: rgba(0,186,124,.13); color: #6ee7b7; }
+html[data-theme="dark"] .position-side.no { background: rgba(244,33,46,.13); color: #ff8b94; }
+html[data-theme="dark"] .credit-packs button { box-shadow: none; }
+html[data-theme="dark"] .credit-packs button strong { border-color: #536471; color: #e7e9ea; }
+html[data-theme="dark"] .credit-packs button:hover:not(:disabled) { border-color: #eff3f4; background: #080808; box-shadow: none; }
+html[data-theme="dark"] .credit-packs button:hover:not(:disabled) strong { border-color: #eff3f4; background: #eff3f4; color: #0f1419; }
+
+html[data-theme="dark"] .auth-gate-mark { background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .auth-gate > button,
+html[data-theme="dark"] .route-error-actions button { border-color: #eff3f4; background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .route-error-actions button:last-child { border-color: #536471; background: transparent; color: #e7e9ea; }
+html[data-theme="dark"] .auth-overlay { background: rgba(91,112,131,.4); }
+html[data-theme="dark"] .auth-modal { background: #000; color: #e7e9ea; box-shadow: 0 8px 30px rgba(255,255,255,.1); }
+html[data-theme="dark"] .auth-brand-mark { color: #e7e9ea; }
+html[data-theme="dark"] .auth-close:hover { background: #181818; }
+html[data-theme="dark"] .auth-email-input { border-color: #536471; background: #000; }
+html[data-theme="dark"] .auth-email-input:focus-within { border-color: #eff3f4; box-shadow: 0 0 0 1px #eff3f4; }
+html[data-theme="dark"] .email-auth-button { background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .auth-success > span { background: #16181c; color: #e7e9ea; }
+html[data-theme="dark"] .auth-success button { color: #e7e9ea; }
+
+@media (prefers-reduced-motion: reduce) {
+  body, .site-header, .market-card, .trade-panel, .balance-card, .credit-packs button, .auth-modal, .theme-toggle svg { transition: none; }
+}

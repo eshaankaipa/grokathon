@@ -1,6 +1,6 @@
 const HOST_ATTRIBUTE = "data-signal-market-card";
 const EMBED_VERSION_ATTRIBUTE = "data-xmarket-embed-version";
-const EMBED_VERSION = "0.3.1";
+const EMBED_VERSION = "0.3.2";
 let processedAnchors = new WeakSet();
 let processedArticleText = new WeakMap();
 let scanScheduled = false;
@@ -98,26 +98,26 @@ function marketIdsFromText(text) {
 
 function cardStyles() {
   return `
-    :host { color-scheme: light; display:block; margin:12px 0 4px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; --surface:#fff; --surface-2:#f7f9f9; --ink:#0f1419; --muted:#536471; --line:#cfd9de; --soft-line:#eff3f4; --inverse:#fff; --positive:#00ba7c; --negative:#f4212e; }
+    :host { color-scheme: light; display:block; width:100%; margin:12px 0 4px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; --card-pad:20px; --surface:#fff; --surface-2:#f7f9f9; --ink:#0f1419; --muted:#536471; --line:#cfd9de; --soft-line:#eff3f4; --inverse:#fff; --positive:#00ba7c; --negative:#f4212e; }
     :host([data-theme="dark"]) { color-scheme:dark; --surface:#000; --surface-2:#080808; --ink:#e7e9ea; --muted:#71767b; --line:#2f3336; --soft-line:#16181c; --inverse:#0f1419; --positive:#00ba7c; --negative:#f4212e; }
     * { box-sizing: border-box; }
-    .card { background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+    .card { width:100%; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:16px; overflow:hidden; }
     .loading { min-height:118px; display:flex; align-items:center; gap:12px; padding:20px; color:var(--muted); font-size:13px; font-weight:500; }
     .spinner { width:17px; height:17px; border:2px solid var(--line); border-top-color:var(--ink); border-radius:50%; animation:spin .8s linear infinite; }
-    .top { padding:16px 16px 15px; }
-    h3 { max-width:510px; font-size:19px; line-height:1.22; letter-spacing:-.45px; font-weight:800; margin:0; }
+    .top { padding:var(--card-pad); }
+    h3 { max-width:100%; font-size:19px; line-height:1.22; letter-spacing:-.45px; font-weight:800; margin:0; overflow-wrap:anywhere; }
     .market-line { display:grid; grid-template-columns:105px 1fr; align-items:end; gap:18px; margin-top:18px; }
     .chance strong { display:block; font-size:39px; line-height:.9; letter-spacing:-2.4px; font-weight:900; }.chance span { display:block; margin-top:7px; color:var(--muted); font-size:8px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; }
     .bar { height:4px; background:var(--soft-line); overflow:hidden; }.bar span { display:block; height:100%; background:var(--ink); }.market-stats { display:flex; gap:15px; color:var(--muted); font-size:9px; font-weight:600; margin-top:9px; }
-    .trade { border-top:1px solid var(--line); padding:12px 16px 14px; background:var(--surface-2); }
+    .trade { border-top:1px solid var(--line); padding:18px var(--card-pad) 20px; background:var(--surface-2); }
     .side-row, .amount-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
     button { font:inherit; cursor:pointer; }.side { min-height:39px; border:1px solid var(--line); border-radius:8px; padding:0 12px; display:flex; justify-content:space-between; align-items:center; background:var(--surface); color:var(--ink); font-size:10px; font-weight:900; letter-spacing:.5px; }.side strong { font-size:12px; }.side.selected { background:var(--ink); color:var(--inverse); border-color:var(--ink); }.side.selected.yes strong { color:var(--positive); }.side.selected.no strong { color:var(--negative); }
     .amount-row { grid-template-columns:repeat(5,1fr); margin-top:6px; }.amount { border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:7px; height:31px; font-size:9px; font-weight:800; }.amount:hover { color:var(--ink); border-color:var(--ink); }.amount.selected { background:var(--ink); color:var(--inverse); border-color:var(--ink); }.custom { padding:0 5px; }
-    .summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; }.estimate { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }.estimate strong { color:var(--ink); }.actions { display:flex; gap:6px; align-items:center; }.open { text-decoration:none; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:8px 11px; font-size:9px; font-weight:800; }.open:hover { border-color:var(--ink); }.preview { border:1px solid var(--line); border-radius:999px; padding:8px 12px; background:var(--soft-line); color:var(--muted); font-size:9px; font-weight:900; cursor:not-allowed; }.preview.sign-in,.preview.trade { border-color:var(--ink); background:var(--ink); color:var(--inverse); cursor:pointer; }.preview.sign-in:disabled,.preview.trade:disabled { opacity:.6; cursor:wait; }
-    .account-line { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:8px; font-weight:600; margin-top:10px; }.account-dot { width:5px; height:5px; border-radius:50%; background:var(--muted); }.account-line.connected { color:var(--positive); }.account-line.connected .account-dot { background:var(--positive); box-shadow:0 0 0 2px color-mix(in srgb,var(--positive) 20%,transparent); }
+    .summary { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:14px; min-width:0; }.estimate { font-size:9px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }.estimate strong { color:var(--ink); }.actions { display:flex; gap:6px; align-items:center; flex:none; }.open { text-decoration:none; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:999px; padding:8px 11px; font-size:9px; font-weight:800; }.open:hover { border-color:var(--ink); }.preview { border:1px solid var(--line); border-radius:999px; padding:8px 12px; background:var(--soft-line); color:var(--muted); font-size:9px; font-weight:900; cursor:not-allowed; }.preview.sign-in,.preview.trade { border-color:var(--ink); background:var(--ink); color:var(--inverse); cursor:pointer; }.preview.sign-in:disabled,.preview.trade:disabled { opacity:.6; cursor:wait; }
+    .account-line { color:var(--muted); font-size:8px; font-weight:600; margin-top:10px; }.account-line.connected { color:var(--positive); }
     .dev { padding:6px 16px; border-top:1px solid var(--line); color:var(--muted); font-size:7px; font-weight:800; text-transform:uppercase; letter-spacing:1px; background:var(--surface); }
     .error { padding:18px; }.error strong { display:block; font-size:13px; }.error p { color:var(--muted); font-size:11px; margin:5px 0 12px; }.error a { color:var(--ink); font-size:10px; font-weight:900; }
-    @media (max-width:430px) { .market-line { grid-template-columns:92px 1fr; gap:12px; }.chance strong { font-size:34px; }.summary { align-items:flex-end; }.actions { gap:4px; }.open,.preview { padding:8px 9px; } }
+    @media (max-width:430px) { :host { --card-pad:14px; }.market-line { grid-template-columns:92px 1fr; gap:12px; }.chance strong { font-size:34px; }.summary { align-items:flex-end; }.actions { gap:4px; }.open,.preview { padding:8px 9px; } }
     @keyframes spin { to { transform:rotate(360deg); } }
   `;
 }
@@ -129,14 +129,13 @@ function renderError(shadow, marketId, message) {
 function renderMarket(shadow, market, marketOrigin, source, authState) {
   let selectedSide = "YES";
   let selectedAmount = 10;
-  const yesPrice = Math.max(0.01, Math.min(0.99, Number(market.yesPrice)));
-  const noPrice = 1 - yesPrice;
+  let yesPrice = Math.max(0.01, Math.min(0.99, Number(market.yesPrice)));
   const liquidity = Number(market.liquidityParameter);
   const marketUrl = `${marketOrigin}/market/${encodeURIComponent(market.id)}`;
   const user = authState?.user;
   const isOpen = market.status === "open" && new Date(market.closesAt) > new Date();
   const estimateShares = () => {
-    const price = selectedSide === "YES" ? yesPrice : noPrice;
+    const price = selectedSide === "YES" ? yesPrice : 1 - yesPrice;
     if (!liquidity || !price) return 0;
     return liquidity * Math.log((Math.exp(selectedAmount / liquidity) - (1 - price)) / price);
   };
@@ -159,14 +158,14 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
       <div class="trade">
         <div class="side-row">
           <button class="side yes selected" data-side="YES"><span>YES</span><strong data-yes-price>${Math.round(yesPrice * 100)}¢</strong></button>
-          <button class="side no" data-side="NO"><span>NO</span><strong data-no-price>${Math.round(noPrice * 100)}¢</strong></button>
+          <button class="side no" data-side="NO"><span>NO</span><strong data-no-price>${Math.round((1 - yesPrice) * 100)}¢</strong></button>
         </div>
         <div class="amount-row">
           ${[1, 5, 10, 25].map((amount) => `<button class="amount ${amount === 10 ? "selected" : ""}" data-amount="${amount}">$${amount}</button>`).join("")}
           <button class="amount custom" data-amount="50">$50</button>
         </div>
         <div class="summary"><span class="estimate">Est. <strong data-shares>${estimateShares().toFixed(2)} shares</strong></span><div class="actions"><a class="open" href="${escapeHtml(marketUrl)}" target="_blank" rel="noopener">Details ↗</a><button class="preview ${user && isOpen ? "trade" : !user && authState?.configured ? "sign-in" : ""}" ${user && isOpen || !user && authState?.configured ? "" : "disabled"}>${!isOpen ? "Market closed" : user ? `Buy ${selectedSide} · $${selectedAmount}` : authState?.configured ? "Connect xmarket" : "Setup required"}</button></div></div>
-        <div class="account-line ${user ? "connected" : ""}"><span class="account-dot"></span><span data-account-label>${escapeHtml(accountLabel)}</span></div>
+        <div class="account-line ${user ? "connected" : ""}"><span data-account-label>${escapeHtml(accountLabel)}</span></div>
       </div>
     </section>`;
 
@@ -222,17 +221,19 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
       if (!response?.ok) throw new Error(response?.error || "Trade failed.");
       const result = response.result;
       const newYesPrice = Number(result.market.yes_price);
+      yesPrice = Math.max(0.01, Math.min(0.99, newYesPrice));
       shadow.querySelector("[data-chance]").textContent = `${Math.round(newYesPrice * 100)}%`;
       shadow.querySelector("[data-probability-bar]").style.width = `${newYesPrice * 100}%`;
       shadow.querySelector("[data-yes-price]").textContent = `${Math.round(newYesPrice * 100)}¢`;
       shadow.querySelector("[data-no-price]").textContent = `${Math.round((1 - newYesPrice) * 100)}¢`;
       shadow.querySelector("[data-volume]").textContent = `$${compactNumber.format(Number(result.market.volume))} volume`;
-      tradeButton.textContent = "Order complete ✓";
       shadow.querySelector("[data-account-label]").textContent = `Bought ${Number(result.shares_bought).toFixed(2)} ${selectedSide} shares · ${Number(result.balance).toFixed(2)} credits left`;
+      updateSummary();
     } catch (error) {
-      tradeButton.disabled = false;
       tradeButton.textContent = "Try order again";
       shadow.querySelector("[data-account-label]").textContent = error.message;
+    } finally {
+      tradeButton.disabled = false;
     }
   });
 }

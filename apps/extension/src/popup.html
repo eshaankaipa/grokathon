@@ -22,30 +22,12 @@
           </form>
         </div>
         <div id="account-signed-in" class="hidden">
-          <div class="user-row"><div id="avatar" class="avatar">X</div><div><strong id="user-name">xmarket trader</strong><small id="user-detail">Connected</small></div><span class="connected-dot"></span></div>
+          <div class="user-row"><div id="avatar" class="avatar">X</div><div><strong id="user-name">xmarket trader</strong><small id="user-detail">Connected</small></div></div>
           <button id="sign-out" class="secondary">Sign out</button>
         </div>
         <div id="auth-message" role="status"></div>
       </section>
 
-      <details id="settings-panel">
-        <summary>Development settings</summary>
-        <section class="settings-section">
-          <label for="origin">Market website</label>
-          <input id="origin" type="url" spellcheck="false" placeholder="http://localhost:5175" />
-
-          <label for="supabase-url">Supabase project URL</label>
-          <input id="supabase-url" type="url" spellcheck="false" placeholder="https://project-ref.supabase.co" />
-
-          <label for="supabase-key">Supabase publishable key</label>
-          <input id="supabase-key" type="password" spellcheck="false" placeholder="sb_publishable_…" />
-
-          <button id="save" class="primary">Save settings</button>
-          <div id="settings-message" role="status"></div>
-        </section>
-      </details>
-
-      <footer><a href="https://x.com/xmarket/status/2086203820150034713" target="_blank">Open test tweet ↗</a><span id="version"></span></footer>
     </main>
     <script type="module" src="popup.js"></script>
   </body>

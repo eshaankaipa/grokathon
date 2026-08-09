@@ -10,8 +10,10 @@ import {
   LoaderCircle,
   Menu,
   LogOut,
+  Moon,
   Search,
   Sparkles,
+  Sun,
   Wallet,
   X,
 } from "lucide-react";
@@ -68,7 +70,7 @@ function Logo({ onClick }) {
   );
 }
 
-function Header({ page, navigate, openAuth, balance }) {
+function Header({ page, navigate, openAuth, balance, theme, toggleTheme }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const { loading, session, signOut, user } = useAuth();
@@ -84,6 +86,9 @@ function Header({ page, navigate, openAuth, balance }) {
           <button className={page === "portfolio" ? "active" : ""} onClick={() => navigate("/portfolio")}><Wallet size={19} /> Portfolio</button>
         </nav>
         <div className="header-actions">
+          <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
+            {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
+          </button>
           <button className="icon-button search-button" aria-label="Search markets"><Search size={19} /></button>
           {session ? (
             <>
@@ -557,6 +562,7 @@ function MarketRouteState({ loading, error, navigate, retry }) {
 }
 
 function App() {
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme || "light");
   const [path, setPath] = useState(window.location.pathname);
   const [authOpen, setAuthOpen] = useState(false);
   const [markets, setMarkets] = useState([]);
@@ -567,6 +573,14 @@ function App() {
   const [marketError, setMarketError] = useState("");
   const [profile, setProfile] = useState(null);
   const { session } = useAuth();
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem("xmarket-theme", theme);
+    const themeColor = document.querySelector("#theme-color");
+    if (themeColor) themeColor.content = theme === "dark" ? "#000000" : "#ffffff";
+  }, [theme]);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname);
@@ -647,7 +661,7 @@ function App() {
   const openMarket = (id) => navigate(`/market/${id}`);
   return (
     <>
-      <Header page={page} navigate={navigate} openAuth={() => setAuthOpen(true)} balance={profile ? Number(profile.demo_balance) : null} />
+      <Header page={page} navigate={navigate} openAuth={() => setAuthOpen(true)} balance={profile ? Number(profile.demo_balance) : null} theme={theme} toggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")} />
       {page === "market" && (market
         ? <MarketDetail market={market} navigate={navigate} openAuth={() => setAuthOpen(true)} balance={profile ? Number(profile.demo_balance) : null} onTradeComplete={handleTradeComplete} />
         : <MarketRouteState loading={marketLoading || !marketError} error={marketError} navigate={navigate} retry={loadSelectedMarket} />
