@@ -14,6 +14,7 @@ import {
   resolveMarket,
   sell,
   userToPublic,
+  type MarketView,
   type QuoteAction,
   type QuoteSide,
   type Trade,
@@ -37,6 +38,11 @@ import {
 import { resolveMarketWithGrok } from "./xai";
 import { announceResolution, autoResolveMarket, resolveDueMarkets } from "./resolver";
 import { runSweeper } from "./sweeper";
+import {
+  attachRelatedTweets,
+  backfillRelatedTweets,
+  listRelatedTweets,
+} from "./market_tweets";
 
 export interface Env {
   DB: D1Database;
@@ -53,6 +59,17 @@ export interface Env {
   XAI_API_KEY: string;
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
+}
+
+/** Fire-and-forget: tag relevant X posts under a newly created market. */
+function scheduleRelatedTweets(
+  ctx: ExecutionContext | undefined,
+  env: Env,
+  market: MarketView,
+): void {
+  const task = attachRelatedTweets(env, market);
+  if (ctx) ctx.waitUntil(task);
+  else void task;
 }
 
 async function getMarketAny(
@@ -421,6 +438,10 @@ export default {
       const { ok: _ok, ...payload } = result;
       void _ok;
 
+      if (payload.action === "created" && payload.market) {
+        scheduleRelatedTweets(ctx, env, payload.market);
+      }
+
       let announcement: unknown;
       // Announce creates / redirects / clarify suggestions — never silent skips
       if (b.announce && creds && !payload.silent) {
@@ -521,6 +542,12 @@ export default {
         botUserId: me.user.id,
         liquidity: body.liquidity,
       });
+
+      for (const r of batch.results) {
+        if (r.action === "created" && r.market) {
+          scheduleRelatedTweets(ctx, env, r.market);
+        }
+      }
 
       const announcements: unknown[] = [];
       if (announce) {
@@ -672,6 +699,21 @@ export default {
       const limitRaw = url.searchParams.get("limit");
       const limit = limitRaw ? parseInt(limitRaw, 10) : 20;
       return resultJson(await listTrades(env, marketId, limit));
+    }
+
+    // GET /markets/:id/tweets — related X posts tagged under this market
+    if (
+      segments[0] === "markets" &&
+      segments.length === 3 &&
+      segments[2] === "tweets" &&
+      method === "GET"
+    ) {
+      const marketId = segments[1];
+      const m = await getMarket(env, marketId);
+      if (!m.ok) return resultJson(m);
+      const tweets = await listRelatedTweets(env, m.market.id);
+      if (!tweets.ok) return json({ ok: false, error: tweets.error }, 500);
+      return json({ ok: true, market_id: m.market.id, tweets: tweets.tweets });
     }
 
     // GET /markets/:id/og | /og.png | /og.svg — dynamic OG image
@@ -835,16 +877,45 @@ export default {
       }>(request);
       if (!parsed.ok) return parsed.response;
       const b = parsed.body;
-      return resultJson(
-        await createMarket(env, {
-          question: b.question ?? "",
-          description: b.description,
-          rules: b.rules,
-          liquidity: b.liquidity,
-          resolve_by: b.resolve_by,
-          created_by: "admin",
-        }),
-      );
+      const created = await createMarket(env, {
+        question: b.question ?? "",
+        description: b.description,
+        rules: b.rules,
+        liquidity: b.liquidity,
+        resolve_by: b.resolve_by,
+        created_by: "admin",
+      });
+      if (created.ok) scheduleRelatedTweets(ctx, env, created.market);
+      return resultJson(created);
+    }
+
+    // POST /markets/:id/related-tweets — refresh X posts for one market (admin)
+    if (
+      segments[0] === "markets" &&
+      segments.length === 3 &&
+      segments[2] === "related-tweets" &&
+      method === "POST"
+    ) {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+      const got = await getMarket(env, segments[1]);
+      if (!got.ok) return resultJson(got);
+      const attached = await attachRelatedTweets(env, got.market);
+      return json(attached, attached.ok ? 200 : 502);
+    }
+
+    // POST /markets/backfill-tweets — attach tweets for open markets missing them (admin)
+    if (
+      segments[0] === "markets" &&
+      segments.length === 2 &&
+      segments[1] === "backfill-tweets" &&
+      method === "POST"
+    ) {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+      const limitRaw = url.searchParams.get("limit");
+      const limit = limitRaw ? parseInt(limitRaw, 10) : 5;
+      return json(await backfillRelatedTweets(env, { limit }));
     }
 
     // POST /markets/:id/lock
@@ -977,6 +1048,7 @@ export default {
             "POST /markets/from-mention  — single mention → create or redirect (admin)",
             "GET  /markets               — list markets",
             "GET  /markets/:id           — market detail + recent trades",
+            "GET  /markets/:id/tweets    — related X posts under this market",
             "GET  /markets/:id/og        — OG image PNG 1200×630",
             "GET  /markets/:id/og.png    — same as /og",
             "GET  /markets/:id/og.svg    — SVG source (debug)",
@@ -988,6 +1060,8 @@ export default {
             "POST /markets/:id/buy       — buy shares (api key)",
             "POST /markets/:id/sell      — sell shares (api key)",
             "POST /markets               — create market (admin)",
+            "POST /markets/:id/related-tweets — refresh related X posts (admin)",
+            "POST /markets/backfill-tweets — fill tweets for open markets missing them (admin)",
             "POST /markets/:id/lock      — lock market (admin)",
             "POST /markets/:id/resolve   — resolve market (admin)",
             "POST /markets/:id/judge     — propose outcome with Grok web search (admin)",
@@ -1035,7 +1109,13 @@ export default {
     const cron = controller.cron;
     if (cron === "0 * * * *") {
       // Hourly trend sweep: discover -> classify -> top 3 -> markets.
-      ctx.waitUntil(runSweeper(env));
+      // Then backfill related tweets for any open markets still missing them.
+      ctx.waitUntil(
+        (async () => {
+          await runSweeper(env);
+          await backfillRelatedTweets(env, { limit: 5 });
+        })(),
+      );
     } else if (cron === "*/30 * * * *") {
       ctx.waitUntil(resolveDueMarkets(env));
     }

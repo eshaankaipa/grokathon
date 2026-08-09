@@ -105,6 +105,147 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(78, 92, 220,
 .chart-axis { display: flex; justify-content: space-between; color: #969a91; font: 500 9px "DM Mono"; text-transform: uppercase; margin-top: 6px; }
 .market-stats { display: grid; grid-template-columns: repeat(3, 1fr); margin: 16px 0 35px; background: rgba(255,255,255,.28); border: 1px solid var(--line); border-radius: 12px; }
 .market-stats div { padding: 17px 20px; border-right: 1px solid var(--line); }.market-stats div:last-child { border: 0; }.market-stats span { display: block; color: var(--muted); font: 500 9px "DM Mono"; text-transform: uppercase; margin-bottom: 7px; }.market-stats strong { font-size: 15px; }
+
+/* Related X posts under markets ------------------------------------------------ */
+.source-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+.source-context:hover { background: #f7f9f9; }
+.source-context .x-glyph {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+.related-tweets-section { margin-top: 8px; margin-bottom: 28px; }
+.related-tweets-head { margin-bottom: 14px; }
+.related-tweets-head h2 {
+  margin: 6px 0 4px;
+  font-size: 22px;
+  letter-spacing: -0.6px;
+}
+.related-tweets-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.related-tweets-list { display: flex; flex-direction: column; gap: 10px; }
+.related-tweet {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: inherit;
+  text-decoration: none;
+  transition: background .15s, border-color .15s;
+}
+.related-tweet:hover { background: #f7f9f9; border-color: #cfd9de; }
+.related-tweet.is-source { border-color: #cfd9de; box-shadow: inset 3px 0 0 var(--ink); }
+.tweet-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  background: #eff3f4;
+}
+.tweet-avatar-fallback {
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--muted);
+}
+.related-tweet-body { min-width: 0; flex: 1; }
+.related-tweet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.related-tweet-meta strong { font-weight: 800; }
+.related-tweet-meta span { color: var(--muted); }
+.source-pill {
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: #eff3f4;
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.related-tweet-body p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.related-tweet-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.related-tweets-loading,
+.related-tweets-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.card-related-tweets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.related-tweet-compact {
+  padding: 10px 12px;
+  border-radius: 12px;
+  gap: 10px;
+}
+.related-tweet-compact .tweet-avatar { width: 32px; height: 32px; }
+.related-tweet-compact .related-tweet-meta { font-size: 12px; }
+.related-tweet-compact .related-tweet-body p {
+  font-size: 12px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .trade-panel { background: var(--card); border: 1px solid #cbc8bd; border-radius: 16px; padding: 22px; position: sticky; top: 100px; box-shadow: 0 18px 45px rgba(33,31,24,.07); }
 .trade-heading { display: flex; justify-content: space-between; align-items: center; font-weight: 800; margin-bottom: 18px; }.trade-heading small { color: var(--green); text-transform: uppercase; font: 500 9px "DM Mono"; letter-spacing: .8px; }
 .trade-mode { display:grid; grid-template-columns:1fr 1fr; gap:4px; padding:4px; margin-bottom:10px; border-radius:999px; background:#eeece5; }.trade-mode button { height:34px; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:11px; font-weight:800; cursor:pointer; }.trade-mode button.active { background:var(--card); color:var(--ink); box-shadow:0 1px 4px rgba(22,25,20,.12); }
@@ -406,10 +547,18 @@ html[data-theme="dark"] .x-prompt { border-color: #536471; background: #000; }
 html[data-theme="dark"] .chart-card,
 html[data-theme="dark"] .market-stats,
 html[data-theme="dark"] .source-context,
+html[data-theme="dark"] .related-tweet,
 html[data-theme="dark"] .trade-panel,
 html[data-theme="dark"] .balance-card,
 html[data-theme="dark"] .positions-table,
 html[data-theme="dark"] .credit-packs button { border-color: #536471; background: #000; }
+html[data-theme="dark"] .related-tweet:hover,
+html[data-theme="dark"] .source-context:hover { background: #080808; border-color: #71767b; }
+html[data-theme="dark"] .source-context .x-glyph { background: #eff3f4; color: #0f1419; }
+html[data-theme="dark"] .source-pill { background: #16181c; color: #e7e9ea; }
+html[data-theme="dark"] .tweet-avatar { background: #202327; }
+html[data-theme="dark"] .related-tweets-loading,
+html[data-theme="dark"] .related-tweets-empty { border-color: #2f3336; }
 html[data-theme="dark"] .chart-base { stroke: #2f3336; }
 html[data-theme="dark"] .market-stats div,
 html[data-theme="dark"] .rules-card,

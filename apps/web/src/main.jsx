@@ -26,6 +26,8 @@ import {
   getMarketPositions,
   getPositions,
   getProfile,
+  getRelatedTweets,
+  getRelatedTweetsForMarkets,
   getTrades,
   getUserTrades,
   listMarkets,
@@ -129,7 +131,104 @@ function Header({ page, navigate, openAuth, balance, theme, toggleTheme }) {
   );
 }
 
-function MarketCard({ market, onOpen, featured = false }) {
+function formatTweetTime(iso) {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
+
+function TweetAvatar({ tweet }) {
+  const label = (tweet.authorName || tweet.authorUsername || "?").slice(0, 1).toUpperCase();
+  if (tweet.authorAvatarUrl) {
+    return <img className="tweet-avatar" src={tweet.authorAvatarUrl.replace("_normal", "_bigger")} alt="" loading="lazy" />;
+  }
+  return <span className="tweet-avatar tweet-avatar-fallback" aria-hidden="true">{label}</span>;
+}
+
+function RelatedTweetCard({ tweet, dense = false }) {
+  const handle = tweet.authorUsername ? `@${tweet.authorUsername}` : "on X";
+  const name = tweet.authorName || tweet.authorUsername || "X user";
+  return (
+    <a
+      className={`related-tweet ${dense ? "related-tweet-compact" : ""} ${tweet.isSource ? "is-source" : ""}`}
+      href={tweet.tweetUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <TweetAvatar tweet={tweet} />
+      <div className="related-tweet-body">
+        <div className="related-tweet-meta">
+          <strong>{name}</strong>
+          <span>{handle}</span>
+          {tweet.tweetCreatedAt && <span>· {formatTweetTime(tweet.tweetCreatedAt)}</span>}
+          {tweet.isSource && <em className="source-pill">Source</em>}
+        </div>
+        <p>{tweet.text}</p>
+        {!dense && (
+          <div className="related-tweet-stats">
+            <span>{compact(tweet.replyCount)} replies</span>
+            <span>{compact(tweet.repostCount)} reposts</span>
+            <span>{compact(tweet.likeCount)} likes</span>
+          </div>
+        )}
+      </div>
+    </a>
+  );
+}
+
+function RelatedTweetsSection({ tweets, loading, error }) {
+  if (loading) {
+    return (
+      <section className="related-tweets-section" aria-busy="true">
+        <div className="related-tweets-head">
+          <span className="section-kicker">From the conversation</span>
+          <h2>Most relevant posts</h2>
+        </div>
+        <div className="related-tweets-loading"><LoaderCircle className="spin" size={18} /> Finding posts on X…</div>
+      </section>
+    );
+  }
+  if (error) {
+    return (
+      <section className="related-tweets-section">
+        <div className="related-tweets-head">
+          <span className="section-kicker">From the conversation</span>
+          <h2>Most relevant posts</h2>
+        </div>
+        <p className="related-tweets-empty">{error}</p>
+      </section>
+    );
+  }
+  if (!tweets?.length) {
+    return (
+      <section className="related-tweets-section">
+        <div className="related-tweets-head">
+          <span className="section-kicker">From the conversation</span>
+          <h2>Most relevant posts</h2>
+        </div>
+        <p className="related-tweets-empty">Related posts will appear here once X search tags this market.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="related-tweets-section" aria-label="Related posts from X">
+      <div className="related-tweets-head">
+        <span className="section-kicker">From the conversation</span>
+        <h2>Most relevant posts</h2>
+        <p>Live signal from X — ranked by relevance and engagement.</p>
+      </div>
+      <div className="related-tweets-list">
+        {tweets.map((tweet) => <RelatedTweetCard key={tweet.tweetId || tweet.id} tweet={tweet} />)}
+      </div>
+    </section>
+  );
+}
+
+function MarketCard({ market, onOpen, featured = false, relatedTweets = [] }) {
   return (
     <article className={`market-card accent-${market.accent} ${featured ? "featured-card" : ""}`} onClick={() => onOpen(market.id)}>
       <div className="card-topline">
@@ -144,6 +243,13 @@ function MarketCard({ market, onOpen, featured = false }) {
         </div>
         <Sparkline values={market.spark} trend={market.trend} />
       </div>
+      {relatedTweets.length > 0 && (
+        <div className="card-related-tweets" aria-label="Related posts">
+          {relatedTweets.slice(0, 2).map((tweet) => (
+            <RelatedTweetCard key={tweet.tweetId || tweet.id} tweet={tweet} dense />
+          ))}
+        </div>
+      )}
       <div className="card-footer">
         <span>{money(market.volume)} volume</span>
         <span>{compact(market.traders)} traders</span>
@@ -156,12 +262,25 @@ function MarketCard({ market, onOpen, featured = false }) {
 function Home({ markets, loading, error, openMarket, retry }) {
   const [tab, setTab] = useState("Trending");
   const [query, setQuery] = useState("");
+  const [tweetsByMarket, setTweetsByMarket] = useState(() => new Map());
   const filtered = useMemo(() => {
     const items = [...markets];
     if (tab === "Recent") items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     if (tab === "Closing soon") items.sort((a, b) => new Date(a.closesAtIso) - new Date(b.closesAtIso));
     return items.filter((market) => `${market.question} ${market.category}`.toLowerCase().includes(query.toLowerCase()));
   }, [markets, tab, query]);
+
+  useEffect(() => {
+    if (!markets.length) {
+      setTweetsByMarket(new Map());
+      return undefined;
+    }
+    let active = true;
+    getRelatedTweetsForMarkets(markets.map((market) => market.dbId), 2)
+      .then((map) => { if (active) setTweetsByMarket(map); })
+      .catch((err) => console.error("Could not load related tweets", err));
+    return () => { active = false; };
+  }, [markets]);
 
   return (
     <main>
@@ -203,7 +322,15 @@ function Home({ markets, loading, error, openMarket, retry }) {
           <div className="empty-state error-state"><X size={28} /><h3>Markets unavailable</h3><p>{error}</p><button onClick={retry}>Try again</button></div>
         ) : filtered.length ? (
           <div className="market-grid">
-            {filtered.map((market, index) => <MarketCard key={market.id} market={market} onOpen={openMarket} featured={index === 0 && !query} />)}
+            {filtered.map((market, index) => (
+              <MarketCard
+                key={market.id}
+                market={market}
+                onOpen={openMarket}
+                featured={index === 0 && !query}
+                relatedTweets={tweetsByMarket.get(market.dbId) || []}
+              />
+            ))}
           </div>
         ) : (
           <div className="empty-state"><Search size={28} /><h3>No markets found</h3><p>Try another topic or phrase.</p></div>
@@ -368,6 +495,9 @@ const timeAgo = (isoString) => {
 function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) {
   const [trades, setTrades] = useState([]);
   const [tradesLoading, setTradesLoading] = useState(true);
+  const [relatedTweets, setRelatedTweets] = useState([]);
+  const [tweetsLoading, setTweetsLoading] = useState(true);
+  const [tweetsError, setTweetsError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -379,6 +509,25 @@ function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) 
     return () => { active = false; };
   }, [market.id]);
 
+  useEffect(() => {
+    let active = true;
+    setTweetsLoading(true);
+    setTweetsError("");
+    getRelatedTweets(market.dbId, 8)
+      .then((tweets) => {
+        if (!active) return;
+        setRelatedTweets(tweets);
+        setTweetsLoading(false);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setRelatedTweets([]);
+        setTweetsError(err.message || "Could not load related posts.");
+        setTweetsLoading(false);
+      });
+    return () => { active = false; };
+  }, [market.dbId]);
+
   return (
     <main className="detail-page page-shell">
       <button className="back-link" onClick={() => navigate("/")}><ArrowLeft size={16} /> All markets</button>
@@ -387,6 +536,12 @@ function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) 
           <div className="detail-meta"><span className="category">{market.category}</span><span><Clock3 size={14} /> Closes {market.closesAt}</span></div>
           <h1>{market.question}</h1>
           <p className="market-description">{market.description}</p>
+          {market.sourceTweetUrl && (
+            <a className="source-context" href={market.sourceTweetUrl} target="_blank" rel="noopener noreferrer">
+              <span className="x-glyph">𝕏</span>
+              Open source post on X
+            </a>
+          )}
           <div className="chart-card">
             <div className="chart-head">
               <div><strong>{Math.round(market.yesPrice * 100)}%</strong><span>chance of YES</span></div>
@@ -400,6 +555,7 @@ function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) 
             <div><span>Traders</span><strong>{compact(market.traders)}</strong></div>
             <div><span>Closes</span><strong>{market.closesAt}</strong></div>
           </div>
+          <RelatedTweetsSection tweets={relatedTweets} loading={tweetsLoading} error={tweetsError} />
           <section className="trade-history">
             <h2>Trade History</h2>
             {tradesLoading ? (
