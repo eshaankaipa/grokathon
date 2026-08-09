@@ -253,3 +253,110 @@ export async function xGetMentions(
     meta: body.meta,
   };
 }
+
+// ---------------------------------------------------------------------------
+// App-only bearer token helpers (used by the background sweeper)
+// ---------------------------------------------------------------------------
+
+export interface XSearchTweet {
+  id: string;
+  text: string;
+  author_id?: string;
+  created_at?: string;
+  public_metrics?: Record<string, number>;
+}
+
+export interface XTrend {
+  trend_name: string;
+  tweet_count?: number;
+}
+
+export type XCountsResult =
+  | { ok: true; total: number; buckets: number[] }
+  | { ok: false; status: number; error: unknown };
+
+export type XSearchResult =
+  | { ok: true; tweets: XSearchTweet[] }
+  | { ok: false; status: number; error: unknown };
+
+export type XTrendsResult =
+  | { ok: true; trends: XTrend[] }
+  | { ok: false; status: number; error: unknown };
+
+function xBearerHeaders(bearer: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${bearer}`,
+    "Content-Type": "application/json",
+  };
+}
+
+export async function xBearerTrends(
+  bearer: string,
+  woeid = 1,
+): Promise<XTrendsResult> {
+  const url = `https://api.x.com/2/trends/by/woeid/${woeid}?trend.fields=trend_name,tweet_count`;
+  const res = await fetch(url, { headers: xBearerHeaders(bearer) });
+  const body = (await res.json()) as {
+    data?: Array<Record<string, unknown>>;
+    errors?: unknown;
+  };
+  if (!res.ok) {
+    return { ok: false, status: res.status, error: body };
+  }
+  const trends: XTrend[] = (body.data ?? []).map((t) => ({
+    trend_name: String(t.trend_name ?? t.name ?? ""),
+    tweet_count: typeof t.tweet_count === "number" ? t.tweet_count : undefined,
+  }));
+  return { ok: true, trends: trends.filter((t) => t.trend_name) };
+}
+
+export async function xBearerCounts(
+  bearer: string,
+  query: string,
+): Promise<XCountsResult> {
+  const url = new URL("https://api.x.com/2/tweets/counts/recent");
+  url.searchParams.set("query", query);
+  url.searchParams.set("granularity", "hour");
+  const res = await fetch(url.toString(), { headers: xBearerHeaders(bearer) });
+  const body = (await res.json()) as {
+    meta?: { total_tweet_count?: number };
+    data?: Array<{ tweet_count?: number }>;
+    errors?: unknown;
+  };
+  if (!res.ok) {
+    return { ok: false, status: res.status, error: body };
+  }
+  const total = body.meta?.total_tweet_count ?? 0;
+  const buckets = (body.data ?? [])
+    .sort((a, b) => 0)
+    .map((b) => b.tweet_count ?? 0);
+  return { ok: true, total, buckets };
+}
+
+export async function xBearerSearch(
+  bearer: string,
+  query: string,
+  maxResults = 20,
+): Promise<XSearchResult> {
+  const url = new URL("https://api.x.com/2/tweets/search/recent");
+  url.searchParams.set("query", query);
+  url.searchParams.set("max_results", String(Math.min(Math.max(maxResults, 10), 100)));
+  url.searchParams.set("tweet.fields", "created_at,public_metrics,author_id");
+  url.searchParams.set("sort_order", "relevancy");
+  const res = await fetch(url.toString(), { headers: xBearerHeaders(bearer) });
+  const body = (await res.json()) as {
+    data?: Array<Record<string, unknown>>;
+    errors?: unknown;
+  };
+  if (!res.ok) {
+    return { ok: false, status: res.status, error: body };
+  }
+  const tweets: XSearchTweet[] = (body.data ?? []).map((t) => ({
+    id: String(t.id),
+    text: String(t.text ?? ""),
+    author_id: t.author_id ? String(t.author_id) : undefined,
+    created_at: t.created_at as string | undefined,
+    public_metrics: t.public_metrics as Record<string, number> | undefined,
+  }));
+  return { ok: true, tweets };
+}

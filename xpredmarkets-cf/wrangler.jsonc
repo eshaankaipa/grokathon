@@ -29,7 +29,7 @@
   },
 
   "triggers": {
-    "crons": ["*/1 * * * *", "*/30 * * * *"]
+    "crons": ["0 * * * *", "*/30 * * * *"]
   },
 
   // Bundle Inter TTF for OG PNG text rendering (resvg has no system fonts)

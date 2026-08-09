@@ -167,7 +167,7 @@ export async function autoCreateModernMarket(
     if (creds) {
       const posted = await xCreateTweet(creds, tweet);
       if (posted.ok) tweet_id = posted.id;
-      else tweet_error = posted.error;
+      else tweet_error = String(posted.error);
     }
     return { ok: true, market: created, tweet_id, tweet_error };
   }

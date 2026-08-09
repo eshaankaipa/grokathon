@@ -36,7 +36,7 @@ import {
 } from "./x";
 import { resolveMarketWithGrok } from "./xai";
 import { announceResolution, autoResolveMarket, resolveDueMarkets } from "./resolver";
-import { autoCreateModernMarket } from "./modern_markets";
+import { runSweeper } from "./sweeper";
 
 export interface Env {
   DB: D1Database;
@@ -46,6 +46,7 @@ export interface Env {
   X_API_SECRET: string;
   X_ACCESS_TOKEN: string;
   X_ACCESS_TOKEN_SECRET: string;
+  X_BEARER_TOKEN: string;
   ADMIN_TOKEN: string;
   XAI_API_KEY: string;
   SUPABASE_URL: string;
@@ -1021,9 +1022,10 @@ export default {
     ctx: ExecutionContext,
   ): Promise<void> {
     const cron = controller.cron;
-    if (cron === "*/1 * * * *") {
-      ctx.waitUntil(autoCreateModernMarket(env));
-    } else {
+    if (cron === "0 * * * *") {
+      // Hourly trend sweep: discover -> classify -> top 3 -> markets.
+      ctx.waitUntil(runSweeper(env));
+    } else if (cron === "*/30 * * * *") {
       ctx.waitUntil(resolveDueMarkets(env));
     }
   },
