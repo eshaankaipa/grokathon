@@ -22,6 +22,8 @@ import sys
 import time
 from pathlib import Path
 
+import requests
+
 from classifier import ClassifierConfig, MarketCandidateClassifier
 from classifier.semantic.fake import FakeSemanticClassifier
 from classifier.semantic.grok_single import GrokSingleShotClassifier
@@ -54,6 +56,62 @@ def _env_int(name: str, default: int) -> int:
         return int(os.environ.get(name, default))
     except ValueError:
         return default
+
+
+def _to_question(canonical: str | None, fallback: str) -> str:
+    if not canonical:
+        return fallback if fallback.endswith("?") else f"Will {fallback}?"
+    canonical = str(canonical).strip()
+    if not canonical:
+        return fallback if fallback.endswith("?") else f"Will {fallback}?"
+    if canonical.endswith("?"):
+        return canonical[0].upper() + canonical[1:]
+    return f"Will {canonical}?"
+
+
+def _create_market(sc, api_base: str = "https://xpred.aidenhuang.com") -> None:
+    admin_token = os.environ.get("XPRED_ADMIN_TOKEN")
+    if not admin_token:
+        print("  [CREATE] XPRED_ADMIN_TOKEN not set; cannot create market.")
+        return
+
+    r = sc.classification_result
+    ct = sc.candidate_topic
+    question = _to_question(r.canonical_event, ct.topic_name)
+    description = (
+        (sc.topic_context.summary if sc.topic_context else None)
+        or r.semantic_features.reasoning_summary
+        or "Auto-generated from X trends."
+    )
+    resolve_by = int(time.time()) + 7 * 24 * 3600
+
+    payload = {
+        "question": question,
+        "description": description,
+        "rules": "Resolves based on authoritative public sources.",
+        "liquidity": 100,
+        "resolve_by": resolve_by,
+    }
+
+    try:
+        resp = requests.post(
+            f"{api_base}/markets",
+            headers={
+                "Authorization": f"Bearer {admin_token}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=30,
+        )
+        data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else None
+        if resp.ok and data and data.get("ok") and data.get("market"):
+            market = data["market"]
+            slug = market.get("slug")
+            print(f"  [CREATE] -> https://xmarket.aidenhuang.com/market/{slug}")
+        else:
+            print(f"  [CREATE] market creation failed ({resp.status_code}): {data or resp.text}")
+    except Exception as e:
+        print(f"  [CREATE] error creating market: {e}")
 
 
 async def _run_once() -> None:
@@ -141,6 +199,8 @@ async def _run_once() -> None:
                 f"  [{label}] {sc.topic_seed.name} "
                 f"(posts={ct.post_count}, score={r.score:.2f}, query={r.query})"
             )
+            if label == "CREATE":
+                _create_market(sc)
 
 
 async def main() -> None:
