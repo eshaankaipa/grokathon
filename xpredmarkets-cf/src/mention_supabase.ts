@@ -30,7 +30,7 @@ function pack(
   if (!market) {
     return { action, ...extra };
   }
-  const urls = marketUrls(market.id);
+  const urls = marketUrls(market);
   return {
     action,
     market,

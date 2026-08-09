@@ -17,10 +17,11 @@ import type { SupabaseEnv } from "./supabase";
 
 type MentionEnv = SupabaseEnv & { DB: D1Database };
 
-const BASE_URL = "https://xpred.aidenhuang.com";
+const WEB_BASE_URL = "https://xmarket.aidenhuang.com";
+const API_BASE_URL = "https://xpred.aidenhuang.com";
 const MARKET_ID_RE = /\bmkt_[a-f0-9]{16,}\b/i;
 const MARKET_URL_RE =
-  /(?:https?:\/\/)?(?:www\.)?xpred\.aidenhuang\.com\/markets\/(mkt_[a-f0-9]+)/i;
+  /(?:https?:\/\/)?(?:www\.)?(?:xmarket(?:-web-3ji)?\.aidenhuang\.com|xmarket(?:-web-3ji)?\.pages\.dev)\/market\/([a-z0-9-]+)/i;
 
 export type MentionAction = "created" | "redirected" | "skipped";
 
@@ -38,10 +39,10 @@ export interface MentionMarketResult {
   already_processed?: boolean;
 }
 
-export function marketUrls(marketId: string): { url: string; og_image: string } {
+export function marketUrls(market: MarketView): { url: string; og_image: string } {
   return {
-    url: `${BASE_URL}/markets/${marketId}`,
-    og_image: `${BASE_URL}/markets/${marketId}/og.png`,
+    url: `${WEB_BASE_URL}/market/${market.slug}`,
+    og_image: `${API_BASE_URL}/markets/${market.id}/og.png`,
   };
 }
 
@@ -209,7 +210,7 @@ function pack(
   if (!market) {
     return { action, ...extra };
   }
-  const urls = marketUrls(market.id);
+  const urls = marketUrls(market);
   return {
     action,
     market,

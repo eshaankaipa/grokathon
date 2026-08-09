@@ -370,7 +370,7 @@ export async function getMarket(env: SupabaseEnv, marketId: string): Promise<Res
   const { data, error } = await getSupabase(env)
     .from("markets")
     .select("*")
-    .eq("id", marketId)
+    .or(`id.eq.${marketId},slug.eq.${marketId}`)
     .maybeSingle();
   if (error || !data) return { ok: false, error: error?.message || "market not found" };
   return { ok: true, market: toMarketViewRaw(data as Record<string, unknown>) };
