@@ -66,9 +66,9 @@ async def _run_once() -> None:
         print("Set X_BEARER_TOKEN (in .env or ~/.env) to pull live X trends.")
         sys.exit(1)
 
-    max_topics = _env_int("MAX_TOPICS", 3)
-    max_x_requests = _env_int("MAX_X_REQUESTS", 8)
-    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 100)
+    max_topics = _env_int("MAX_TOPICS", 1)
+    max_x_requests = _env_int("MAX_X_REQUESTS", 5)
+    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 10)
     min_volume = _env_int("MIN_VOLUME", 25)
     max_context_grok_calls = _env_int("MAX_CONTEXT_GROK_CALLS", 2)
     interval = _env_int("SWEEP_INTERVAL_SECONDS", 0)

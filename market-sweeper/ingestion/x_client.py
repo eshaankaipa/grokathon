@@ -151,6 +151,7 @@ class XIngestionClient:
         posts = self.search_recent(query, max_posts)
 
         authors: set[str] = set()
+        seen_tweet_ids: set[str] = set()
         engagement_total = 0
         impression_total = 0
         has_impressions = False
@@ -158,6 +159,11 @@ class XIngestionClient:
         oldest: float | None = None
 
         for p in posts:
+            tweet_id = str(p.get("id") or "")
+            if tweet_id:
+                if tweet_id in seen_tweet_ids:
+                    continue
+                seen_tweet_ids.add(tweet_id)
             pm = p.get("public_metrics") or {}
             eng = sum(
                 int(v) for k, v in pm.items()
