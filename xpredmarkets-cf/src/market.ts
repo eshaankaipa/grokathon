@@ -286,9 +286,26 @@ export async function createUser(env: SupabaseEnv, displayName: string): Promise
   const api_key = generateApiKey();
   const hash = await hashApiKey(api_key);
   const prefix = api_key.slice(0, 8);
-  const { data, error } = await getSupabase(env).rpc("create_profile", { p_display_name: name, p_api_key_hash: hash, p_api_key_prefix: prefix });
-  if (error || !data) return { ok: false, error: error?.message || "failed to create user" };
-  const user = mapUser(data as Record<string, unknown>);
+  const supabase = getSupabase(env);
+  const email = `${crypto.randomUUID()}@example.com`;
+  const password = crypto.randomUUID().replace(/-/g, "");
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: name, name: name, user_name: name, preferred_username: name },
+  });
+  if (authError || !authData?.user) return { ok: false, error: authError?.message || "failed to create auth user" };
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .update({ display_name: name, api_key_hash: hash, api_key_prefix: prefix, demo_balance: 1000 })
+    .eq("id", authData.user.id)
+    .select()
+    .single();
+  if (profileError || !profile) {
+    return { ok: false, error: profileError?.message || "failed to update profile" };
+  }
+  const user = mapUser(profile as Record<string, unknown>);
   return { ok: true, user: { ...userToPublic(user), api_key } };
 }
 
