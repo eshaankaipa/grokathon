@@ -20,16 +20,26 @@ class XTrendDiscovery:
 
     async def discover(self) -> list[TopicSeed]:
         raw = self._client.fetch_trends(self._woeid)
-        seeds: list[TopicSeed] = []
-        for t in raw[: self._limit]:
+        ranked: list[tuple[int, str, dict]] = []
+        for t in raw:
             name = t.get("trend_name") or t.get("name")
             if not name:
                 continue
+            try:
+                total, _ = self._client.fetch_counts(name)
+            except Exception:
+                total = 0
+            ranked.append((total, name, t))
+
+        ranked.sort(key=lambda x: x[0], reverse=True)
+
+        seeds: list[TopicSeed] = []
+        for total, name, _ in ranked[: self._limit]:
             seeds.append(TopicSeed(
                 topic_id=slug(name),
                 name=name,
                 source="trend",
-                metadata={"query": name, "tweet_count": t.get("tweet_count"),
+                metadata={"query": name, "tweet_count": total,
                           "woeid": self._woeid},
             ))
         return seeds

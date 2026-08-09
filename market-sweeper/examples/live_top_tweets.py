@@ -136,15 +136,20 @@ async def _run_once() -> None:
         print("Set X_BEARER_TOKEN (in .env or ~/.env) to pull live X trends.")
         sys.exit(1)
 
-    max_topics = _env_int("MAX_TOPICS", 2)
-    max_x_requests = _env_int("MAX_X_REQUESTS", 10)
-    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 50)
-    min_volume = _env_int("MIN_VOLUME", 25)
-    max_context_grok_calls = _env_int("MAX_CONTEXT_GROK_CALLS", 2)
-    woeid = _env_int("X_TRENDS_WOEID", 1)
+    max_topics = _env_int("MAX_TOPICS", 10)
+    max_x_requests = _env_int("MAX_X_REQUESTS", 60)
+    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 15)
+    min_volume = _env_int("MIN_VOLUME", 0)
+    max_context_grok_calls = _env_int("MAX_CONTEXT_GROK_CALLS", 1)
+    woeid = _env_int("X_TRENDS_WOEID", 23424977)
     debug = _env_int("SWEEPER_DEBUG", 0)
-    create_threshold = _env_float("CREATE_THRESHOLD", 0.62)
-    interval = _env_int("SWEEP_INTERVAL_SECONDS", 0)
+    create_threshold = _env_float("CREATE_THRESHOLD", 0.45)
+    wait_threshold = _env_float("WAIT_THRESHOLD", 0.30)
+    min_eventness = _env_float("MIN_EVENTNESS", 0.45)
+    min_resolvability = _env_float("MIN_RESOLVABILITY", 0.45)
+    min_unresolvedness = _env_float("MIN_UNRESOLVEDNESS", 0.30)
+    min_specificity = _env_float("MIN_SPECIFICITY", 0.40)
+    interval = _env_int("SWEEP_INTERVAL_SECONDS", 3600)
     discovery_mode = os.environ.get("DISCOVERY_MODE", "trends").strip().lower()
     default_queries = (
         "from:Reuters OR from:AP OR from:politico OR from:axios OR from:CNBC "
@@ -213,7 +218,14 @@ async def _run_once() -> None:
         context_builder=context_builder,
         classifier=MarketCandidateClassifier(
             semantic_classifier=semantic,
-            config=ClassifierConfig(create_threshold=create_threshold),
+            config=ClassifierConfig(
+                create_threshold=create_threshold,
+                wait_threshold=wait_threshold,
+                min_eventness=min_eventness,
+                min_resolvability=min_resolvability,
+                min_unresolvedness=min_unresolvedness,
+                min_specificity_for_create=min_specificity,
+            ),
         ),
         budget=budget,
         config=cfg,
