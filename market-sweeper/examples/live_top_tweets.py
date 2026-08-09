@@ -70,6 +70,7 @@ async def _run_once() -> None:
     max_x_requests = _env_int("MAX_X_REQUESTS", 8)
     max_posts = _env_int("MAX_POSTS_PER_TOPIC", 100)
     min_volume = _env_int("MIN_VOLUME", 25)
+    max_context_grok_calls = _env_int("MAX_CONTEXT_GROK_CALLS", 2)
     interval = _env_int("SWEEP_INTERVAL_SECONDS", 0)
 
     cfg = SweeperConfig(
@@ -77,6 +78,7 @@ async def _run_once() -> None:
         max_x_requests_per_sweep=max_x_requests,
         max_posts_per_topic=max_posts,
         min_volume=min_volume,
+        max_context_grok_calls_per_topic=max_context_grok_calls,
     )
 
     xai_key = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")
@@ -108,6 +110,7 @@ async def _run_once() -> None:
     print(f"  max topics: {max_topics}")
     print(f"  max posts/topic: {max_posts}")
     print(f"  max X requests: {max_x_requests}")
+    print(f"  max Grok context calls/topic: {max_context_grok_calls}")
     print(f"  sweep interval: {interval}s (0 = one-shot)")
 
     budget = RequestBudget(max_requests=cfg.max_x_requests_per_sweep)
