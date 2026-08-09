@@ -24,10 +24,8 @@ from pathlib import Path
 
 from classifier import ClassifierConfig, MarketCandidateClassifier
 from classifier.semantic.fake import FakeSemanticClassifier
-from classifier.semantic.grok import GrokSemanticClassifier
-from context.config import ContextConfig
+from classifier.semantic.grok_single import GrokSingleShotClassifier
 from context.fake import FakeContextBuilder
-from context.grok import GrokContextBuilder
 from context.models import TopicContext
 from discovery.composite import CompositeDiscovery
 from discovery.configured import ConfiguredDiscovery
@@ -85,13 +83,10 @@ async def _run_once() -> None:
     use_grok = bool(xai_key)
 
     if use_grok:
-        print("INFO: using Grok for semantic classification + context.")
-        semantic = GrokSemanticClassifier()
-        context_builder = GrokContextBuilder(
-            config=ContextConfig(
-                max_grok_calls_per_topic=cfg.max_context_grok_calls_per_topic
-            )
-        )
+        print("INFO: using Grok single-shot for context + classification (one call).")
+        single = GrokSingleShotClassifier()
+        context_builder = single
+        semantic = single
     else:
         print("INFO: XAI_API_KEY not found; using fake semantic + context.")
         semantic = FakeSemanticClassifier()
