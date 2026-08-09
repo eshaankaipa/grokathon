@@ -33,6 +33,8 @@ import {
   type XCreds,
   type XMention,
 } from "./x";
+import { resolveMarketWithGrok } from "./xai";
+import { announceResolution, autoResolveMarket, resolveDueMarkets } from "./resolver";
 
 export interface Env {
   DB: D1Database;
@@ -197,7 +199,7 @@ async function readJsonBody<T>(
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "") || "/";
     const segments = path.split("/").filter(Boolean);
@@ -846,7 +848,62 @@ export default {
           400,
         );
       }
-      return resultJson(await resolveMarket(env, marketId, outcome));
+      const resolved = await resolveMarket(env, marketId, outcome);
+      if (!resolved.ok) return resultJson(resolved);
+      const announce = await announceResolution(env, resolved.market, outcome, "", resolved.payouts);
+      return json({
+        ok: true,
+        market: resolved.market,
+        payouts: resolved.payouts,
+        tweet_id: announce.tweet_id,
+        announcement_error: announce.error,
+      });
+    }
+
+    // POST /markets/:id/judge — propose an outcome using Grok + web search
+    if (
+      segments[0] === "markets" &&
+      segments.length === 3 &&
+      segments[2] === "judge" &&
+      method === "POST"
+    ) {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+      const marketId = segments[1];
+      const got = await getMarket(env, marketId);
+      if (!got.ok) return resultJson(got);
+      const judged = await resolveMarketWithGrok(env, got.market);
+      if (!judged.ok) return json({ ok: false, error: judged.error }, 400);
+      return json({
+        ok: true,
+        market: got.market,
+        proposal: judged.data,
+      });
+    }
+
+    // POST /markets/:id/auto-resolve — lock + resolve using Grok + web search
+    if (
+      segments[0] === "markets" &&
+      segments.length === 3 &&
+      segments[2] === "auto-resolve" &&
+      method === "POST"
+    ) {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+      const marketId = segments[1];
+      return resultJson(await autoResolveMarket(env, marketId));
+    }
+
+    // POST /markets/resolve-due — run the auto resolver over all due markets
+    if (
+      segments[0] === "markets" &&
+      segments.length === 2 &&
+      segments[1] === "resolve-due" &&
+      method === "POST"
+    ) {
+      const denied = requireAdmin(request, env);
+      if (denied) return denied;
+      return json({ ok: true, ...(await resolveDueMarkets(env)) });
     }
 
     // POST /users/:id/credit
@@ -903,6 +960,9 @@ export default {
             "POST /markets               — create market (admin)",
             "POST /markets/:id/lock      — lock market (admin)",
             "POST /markets/:id/resolve   — resolve market (admin)",
+            "POST /markets/:id/judge     — propose outcome with Grok web search (admin)",
+            "POST /markets/:id/auto-resolve — lock + resolve with Grok web search (admin)",
+            "POST /markets/resolve-due   — resolve all past-due markets (admin)",
             "POST /users/:id/credit      — credit user (admin)",
           ],
         });
@@ -935,6 +995,14 @@ export default {
     }
 
     return json({ error: "not found" }, 404);
+  },
+
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<void> {
+    ctx.waitUntil(resolveDueMarkets(env));
   },
 };
 
