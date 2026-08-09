@@ -95,17 +95,29 @@ class XIngestionClient:
         return total, series
 
     def search_recent(self, query: str, max_results: int = 100) -> list[dict]:
-        data = self._get(
-            _SEARCH_RECENT,
-            {
+        """Search recent tweets, paginating until ``max_results`` or budget/limits."""
+        target = max(0, max_results)
+        per_page = 100
+        tweets: list[dict] = []
+        next_token: str | None = None
+        while len(tweets) < target:
+            params: dict[str, Any] = {
                 "query": query,
-                "max_results": max(10, min(100, max_results)),
+                "max_results": max(10, min(per_page, target - len(tweets))),
                 "tweet.fields": "created_at,public_metrics,author_id",
                 "sort_order": "relevancy",
-            },
-            "search/recent",
-        )
-        return list(data.get("data", []))
+            }
+            if next_token:
+                params["next_token"] = next_token
+            data = self._get(_SEARCH_RECENT, params, "search/recent")
+            batch = list(data.get("data", []))
+            if not batch:
+                break
+            tweets.extend(batch)
+            next_token = (data.get("meta") or {}).get("next_token")
+            if not next_token:
+                break
+        return tweets
 
     def fetch_trends(self, woeid: int = 1) -> list[dict]:
         """Return the raw trend objects for a WOEID (1 = global). Spends 1 budget unit."""

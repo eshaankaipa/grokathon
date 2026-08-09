@@ -68,13 +68,15 @@ async def _run_once() -> None:
 
     max_topics = _env_int("MAX_TOPICS", 3)
     max_x_requests = _env_int("MAX_X_REQUESTS", 8)
+    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 100)
+    min_volume = _env_int("MIN_VOLUME", 25)
     interval = _env_int("SWEEP_INTERVAL_SECONDS", 0)
 
     cfg = SweeperConfig(
         max_topics_per_sweep=max_topics,
         max_x_requests_per_sweep=max_x_requests,
-        max_posts_per_topic=40,
-        min_volume=25,
+        max_posts_per_topic=max_posts,
+        min_volume=min_volume,
     )
 
     xai_key = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")
@@ -104,6 +106,7 @@ async def _run_once() -> None:
     if not use_grok:
         print("WARNING: no XAI_API_KEY. Classifications are deterministic fakes.")
     print(f"  max topics: {max_topics}")
+    print(f"  max posts/topic: {max_posts}")
     print(f"  max X requests: {max_x_requests}")
     print(f"  sweep interval: {interval}s (0 = one-shot)")
 
@@ -130,12 +133,15 @@ async def _run_once() -> None:
 
     print(f"\nX requests spent: {result.requests_spent}")
     print(f"CREATE: {len(result.create)}  WAIT: {len(result.wait)}  REJECT/skip: {result.rejected_count}")
-    for label, bucket in (("CREATE", result.create), ("WAIT", result.wait)):
+    for label, bucket in (("CREATE", result.create), ("WAIT", result.wait), ("REJECT", [])):
+        if label == "REJECT":
+            continue
         for sc in bucket:
             r = sc.classification_result
+            ct = sc.candidate_topic
             print(
-                f"  [{label}] {sc.topic_seed.name} -> {r.canonical_event} "
-                f"(score {r.score:.2f}, query={r.query})"
+                f"  [{label}] {sc.topic_seed.name} "
+                f"(posts={ct.post_count}, score={r.score:.2f}, query={r.query})"
             )
 
 
