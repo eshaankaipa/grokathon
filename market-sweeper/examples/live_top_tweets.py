@@ -17,6 +17,7 @@ Examples:
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
 import time
@@ -54,6 +55,13 @@ def _load_dotenv() -> None:
 def _env_int(name: str, default: int) -> int:
     try:
         return int(os.environ.get(name, default))
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.environ.get(name, default))
     except ValueError:
         return default
 
@@ -133,7 +141,13 @@ async def _run_once() -> None:
     max_posts = _env_int("MAX_POSTS_PER_TOPIC", 10)
     min_volume = _env_int("MIN_VOLUME", 25)
     max_context_grok_calls = _env_int("MAX_CONTEXT_GROK_CALLS", 2)
+    woeid = _env_int("X_TRENDS_WOEID", 1)
+    debug = _env_int("SWEEPER_DEBUG", 0)
+    create_threshold = _env_float("CREATE_THRESHOLD", 0.62)
     interval = _env_int("SWEEP_INTERVAL_SECONDS", 0)
+
+    if debug:
+        logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
 
     cfg = SweeperConfig(
         max_topics_per_sweep=max_topics,
@@ -141,6 +155,7 @@ async def _run_once() -> None:
         max_posts_per_topic=max_posts,
         min_volume=min_volume,
         max_context_grok_calls_per_topic=max_context_grok_calls,
+        debug=bool(debug),
     )
 
     xai_key = os.environ.get("XAI_API_KEY") or os.environ.get("GROK_API_KEY")
@@ -176,7 +191,7 @@ async def _run_once() -> None:
     client = XIngestionClient(budget=budget)
     discovery = CompositeDiscovery(
         [
-            XTrendDiscovery(client, woeid=1, limit=cfg.max_topics_per_sweep),
+            XTrendDiscovery(client, woeid=woeid, limit=cfg.max_topics_per_sweep),
             ConfiguredDiscovery(["fed rate decision -is:retweet lang:en"]),
         ]
     )
@@ -185,7 +200,8 @@ async def _run_once() -> None:
         ingestion=XSeedIngestion(client, cfg),
         context_builder=context_builder,
         classifier=MarketCandidateClassifier(
-            semantic_classifier=semantic, config=ClassifierConfig()
+            semantic_classifier=semantic,
+            config=ClassifierConfig(create_threshold=create_threshold),
         ),
         budget=budget,
         config=cfg,
@@ -195,18 +211,34 @@ async def _run_once() -> None:
 
     print(f"\nX requests spent: {result.requests_spent}")
     print(f"CREATE: {len(result.create)}  WAIT: {len(result.wait)}  REJECT/skip: {result.rejected_count}")
-    for label, bucket in (("CREATE", result.create), ("WAIT", result.wait), ("REJECT", [])):
-        if label == "REJECT":
-            continue
-        for sc in bucket:
-            r = sc.classification_result
-            ct = sc.candidate_topic
-            print(
-                f"  [{label}] {sc.topic_seed.name} "
-                f"(posts={ct.post_count}, score={r.score:.2f}, query={r.query})"
-            )
-            if label == "CREATE":
-                _call_spec_generator(sc)
+    for sc in result.create:
+        r = sc.classification_result
+        ct = sc.candidate_topic
+        sf = r.semantic_features
+        nf = r.numeric_features
+        print(
+            f"  [CREATE] {sc.topic_seed.name} "
+            f"(posts={ct.post_count}, score={r.score:.2f}, query={r.query})"
+        )
+        print(f"    sem: event={sf.eventness:.2f} res={sf.resolvability:.2f} "
+              f"unres={sf.unresolvedness:.2f} subj={sf.subjectivity:.2f} spec={sf.specificity:.2f}")
+        print(f"    num: att={nf.attention:.2f} vel={nf.velocity:.2f} "
+              f"eng={nf.engagement:.2f} div={nf.diversity:.2f} fresh={nf.freshness:.2f}")
+        _call_spec_generator(sc)
+
+    for sc in result.wait:
+        r = sc.classification_result
+        ct = sc.candidate_topic
+        sf = r.semantic_features
+        nf = r.numeric_features
+        print(
+            f"  [WAIT] {sc.topic_seed.name} "
+            f"(posts={ct.post_count}, score={r.score:.2f}, query={r.query})"
+        )
+        print(f"    sem: event={sf.eventness:.2f} res={sf.resolvability:.2f} "
+              f"unres={sf.unresolvedness:.2f} subj={sf.subjectivity:.2f} spec={sf.specificity:.2f}")
+        print(f"    num: att={nf.attention:.2f} vel={nf.velocity:.2f} "
+              f"eng={nf.engagement:.2f} div={nf.diversity:.2f} fresh={nf.freshness:.2f}")
 
 
 async def main() -> None:
