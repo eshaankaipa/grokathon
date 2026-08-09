@@ -11,7 +11,7 @@ class ContextConfig:
     chunk_size: int = 10
     max_synthesis_inputs: int = 8
     max_grok_calls_per_topic: int = 6
-    model: str = "grok-4-latest"
+    model: str = "grok-4.5"
 
     def __post_init__(self) -> None:
         if self.chunk_size < 1:

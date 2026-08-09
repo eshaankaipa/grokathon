@@ -67,7 +67,7 @@ class GrokSemanticClassifier(SemanticClassifier):
         self,
         *,
         api_key: str | None = None,
-        model: str = "grok-4-latest",
+        model: str = "grok-4.5",
         base_url: str = "https://api.x.ai/v1",
         client: Any | None = None,
     ) -> None:
