@@ -22,6 +22,7 @@ import {
 import {
   formatMarketReply,
   processMentionToMarket,
+  processMentionWithGate,
   processMentionsBatch,
 } from "./mention_market";
 import { processMentionToSupabase } from "./mention_supabase";
@@ -369,19 +370,30 @@ export default {
         if (me.ok) botUserId = me.user.id;
       }
 
-      const useGrok =
-        env.XAI_API_KEY && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY;
+      // Prefer Grok binary gate whenever XAI is configured; never force-create open-ended.
+      const useGrok = Boolean(env.XAI_API_KEY && String(env.XAI_API_KEY).trim());
 
       const result = useGrok
-        ? await processMentionToSupabase(env, {
-            text: b.text,
-            tweet_id: b.tweet_id,
-            author_id: b.author_id,
-            author_username: b.author_username,
-            botUsername,
-            botUserId,
-            liquidity: b.liquidity,
-          })
+        ? env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY
+          ? await processMentionToSupabase(env as Env & { XAI_API_KEY: string }, {
+              text: b.text,
+              tweet_id: b.tweet_id,
+              author_id: b.author_id,
+              author_username: b.author_username,
+              botUsername,
+              botUserId,
+              liquidity: b.liquidity,
+            })
+          : await processMentionWithGate(env, {
+              text: b.text,
+              tweet_id: b.tweet_id,
+              author_id: b.author_id,
+              author_username: b.author_username,
+              botUsername,
+              botUserId,
+              liquidity: b.liquidity,
+              force_create: b.force_create,
+            })
         : await processMentionToMarket(env, {
             text: b.text,
             tweet_id: b.tweet_id,
@@ -398,7 +410,8 @@ export default {
       void _ok;
 
       let announcement: unknown;
-      if (b.announce && payload.market_id && creds) {
+      // Announce creates, redirects, AND helpful skip/clarify replies with suggestions
+      if (b.announce && creds) {
         const reply = formatMarketReply(payload);
         if (reply && b.tweet_id) {
           const posted = await xCreateTweet(creds, reply, b.tweet_id);
@@ -407,12 +420,14 @@ export default {
                 ok: true,
                 id: posted.id,
                 url: `https://x.com/${botUsername}/status/${posted.id}`,
+                text: reply,
               }
             : { ok: false, error: posted.error };
         } else if (reply && !b.tweet_id) {
           announcement = {
             ok: false,
             error: "announce requires tweet_id to reply",
+            text: reply,
           };
         }
       }
@@ -498,7 +513,7 @@ export default {
       const announcements: unknown[] = [];
       if (announce) {
         for (const r of batch.results) {
-          if (r.action === "skipped" || !r.tweet_id) continue;
+          if (!r.tweet_id) continue;
           // Don't re-announce already-processed tweets
           if (r.already_processed) continue;
           const text = formatMarketReply(r);
@@ -508,6 +523,8 @@ export default {
             tweet_id: r.tweet_id,
             market_id: r.market_id,
             action: r.action,
+            gate: r.gate,
+            text,
             post: posted.ok
               ? {
                   ok: true,

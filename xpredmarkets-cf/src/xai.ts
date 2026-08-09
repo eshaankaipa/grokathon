@@ -1,6 +1,16 @@
 /**
- * Grok / xAI parser: turn a tweet mention into a structured market record.
+ * Grok / xAI parser: gate mentions into CREATE vs REJECT/CLARIFY,
+ * and only then produce a structured binary market record.
  */
+
+import {
+  cleanMentionText,
+  filterBinarySuggestions,
+  heuristicSuggestions,
+  looksBinaryQuestion,
+  looksOpenEnded,
+  validateBinaryQuestion,
+} from "./binary_gate";
 
 export type GrokMarketParse = {
   question: string;
@@ -12,6 +22,23 @@ export type GrokMarketParse = {
 
 export type GrokParseResult =
   | { ok: true; data: GrokMarketParse }
+  | { ok: false; error: string };
+
+/** Gate decision for a user mention. */
+export type MentionGateDecision = "create" | "reject" | "clarify";
+
+export type MentionGateOk = {
+  ok: true;
+  decision: MentionGateDecision;
+  reason: string;
+  /** Present only when decision === "create" and post-validated. */
+  market?: GrokMarketParse;
+  /** 1–3 binary yes/no alternatives the user can reply with. */
+  suggestions: string[];
+};
+
+export type MentionGateResult =
+  | MentionGateOk
   | { ok: false; error: string };
 
 const XAI_BASE_URL = "https://api.x.ai/v1";
@@ -37,14 +64,6 @@ function normalizeCategory(c: string): string {
     (x) => x.toLowerCase() === s.toLowerCase(),
   );
   return match ?? "Other";
-}
-
-function stripMentions(text: string, botUsername = "XPredMarkets"): string {
-  return text
-    .replace(new RegExp(`\\b@${botUsername}\\b`, "gi"), " ")
-    .replace(/@\w+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 function extractJson(text: string): string {
@@ -73,16 +92,53 @@ function extractJson(text: string): string {
   return t;
 }
 
-export async function parseMarketWithGrok(
+function resolveClosesAt(
+  cleaned: string,
+  rawCloses: string | undefined,
+  endOfToday: Date,
+  endOfTomorrow: Date,
+): string {
+  const lower = cleaned.toLowerCase();
+  const isToday = /\b(today|tonight|this (morning|afternoon|evening))\b/.test(lower);
+  const isTomorrow = /\btomorrow\b/.test(lower);
+  if (isToday) return endOfToday.toISOString();
+  if (isTomorrow) return endOfTomorrow.toISOString();
+  if ((rawCloses ?? "").trim()) {
+    const d = new Date(rawCloses!);
+    const min = new Date();
+    if (Number.isFinite(d.getTime()) && d > min) return d.toISOString();
+  }
+  return defaultClosesAt();
+}
+
+type GrokGateRaw = {
+  decision?: string;
+  reason?: string;
+  question?: string;
+  description?: string;
+  resolution_criteria?: string;
+  category?: string;
+  closes_at?: string;
+  suggestions?: unknown;
+};
+
+/**
+ * Assess a mention: only CREATE when it is a clean, resolvable yes/no.
+ * Otherwise REJECT/CLARIFY and return similar binary suggestions the user can reply with.
+ */
+export async function assessMentionWithGrok(
   text: string,
   apiKey: string,
   opts?: { botUsername?: string; model?: string },
-): Promise<GrokParseResult> {
+): Promise<MentionGateResult> {
   const model = opts?.model ?? "grok-latest";
-  const cleaned = stripMentions(text, opts?.botUsername ?? "XPredMarkets");
+  const cleaned = cleanMentionText(text, opts?.botUsername ?? "XPredMarkets");
   if (!cleaned) {
     return { ok: false, error: "empty mention after stripping @handles" };
   }
+
+  // Fast path: clearly open-ended → never create; still ask Grok for good suggestions.
+  const forcedClarify = looksOpenEnded(cleaned) && !looksBinaryQuestion(cleaned);
 
   const nowDate = new Date();
   const now = nowDate.toISOString();
@@ -91,18 +147,31 @@ export async function parseMarketWithGrok(
   const endOfTomorrow = new Date(endOfToday);
   endOfTomorrow.setUTCDate(endOfToday.getUTCDate() + 1);
 
-  const prompt = `You parse a tweet into a structured prediction market. Return ONLY a compact JSON object with these keys and no other text:
+  const prompt = `You are a gatekeeper for a BINARY prediction-market bot (YES/NO only).
 
-- question: a clear, concise prediction market question (10-280 chars, preferably ending with ?)
-- description: 1-2 sentences of helpful context, or an empty string
-- resolution_criteria: a concrete, verifiable rule for how the market resolves
+Decide whether this tweet can become ONE clean, objectively resolvable yes/no market.
+
+decision must be exactly one of:
+- CREATE — the tweet already states (or clearly intends) a single verifiable YES/NO claim. A neutral observer could settle it from public info. Question must start with Will/Is/Are/Does/Has/Can/… and end with ?.
+- CLARIFY — topic is real but not yet a yes/no market (open-ended who/which/what/how many, missing named outcome, missing date, too vague). Do NOT invent a specific winner or force a random binary rewrite of the user's intent.
+- REJECT — never tradeable: subjective opinion, joke/meme/spam, already resolved, unverifiable, or harmful/private-life content.
+
+Hard rules:
+- NEVER CREATE for "who will win…", "which team…", "what will happen…", "how many…"
+- NEVER CREATE subjective markets ("best", "overrated", "amazing") without a numeric public criterion
+- Do NOT silently rewrite multi-outcome questions into yes/no and CREATE them
+- DO CREATE when the user already wrote a clear Will/Is/Are/Does yes/no with a named subject (person/team/thing), even if the event is informal — e.g. "Will team Grok win the hackathon?" is CREATE (resolve via official winner announcement). Prefer CREATE over CLARIFY for already-binary phrasing.
+- Use CLARIFY when the claim is multi-outcome, missing any proposition, or too ambiguous to settle at all
+- On CLARIFY or REJECT, suggestions MUST be 2-3 alternative questions that ARE valid yes/no, close in spirit to what the user asked, each starting with Will/Is/Are/… and ending with ?, under 120 chars, objectively resolvable. Prefer concrete named alternatives over placeholders like "Team A".
+- On CREATE, suggestions may be empty []; question + resolution_criteria are required
+- resolution_criteria must say what makes YES and what makes NO
 - category: one of ${CATEGORIES.join(", ")}
-- closes_at: an ISO 8601 timestamp for a sensible close date. Use these defaults unless an explicit, different close time is clearly stated:
-  - today/tonight/this afternoon -> ${endOfToday.toISOString()}
-  - tomorrow -> ${endOfTomorrow.toISOString()}
-  - any other date in the past or unspecified -> 7 days from ${now}
+- closes_at: ISO 8601 future timestamp. Defaults: today/tonight -> ${endOfToday.toISOString()}; tomorrow -> ${endOfTomorrow.toISOString()}; else 7 days from ${now}
 
-Tweet to parse: ${cleaned}`;
+Tweet: ${cleaned}
+
+Return ONLY JSON:
+{"decision":"CREATE|CLARIFY|REJECT","reason":"","question":"","description":"","resolution_criteria":"","category":"Other","closes_at":"","suggestions":["",""]}`;
 
   try {
     const res = await fetch(`${XAI_BASE_URL}/chat/completions`, {
@@ -116,7 +185,7 @@ Tweet to parse: ${cleaned}`;
         messages: [
           {
             role: "system",
-            content: `You are a helpful prediction-market parser. The current UTC time is ${new Date().toISOString()}. Always respond with valid JSON only. The closes_at field must be a future ISO 8601 timestamp after the current time.`,
+            content: `You gate binary prediction markets. Current UTC: ${now}. Respond with valid JSON only. Prefer CLARIFY over CREATE when unsure. Never force open-ended questions into CREATE.`,
           },
           { role: "user", content: prompt },
         ],
@@ -141,9 +210,9 @@ Tweet to parse: ${cleaned}`;
       return { ok: false, error: "xAI returned empty content" };
     }
 
-    let parsed: Partial<GrokMarketParse>;
+    let parsed: GrokGateRaw;
     try {
-      parsed = JSON.parse(extractJson(raw)) as Partial<GrokMarketParse>;
+      parsed = JSON.parse(extractJson(raw)) as GrokGateRaw;
     } catch (e) {
       return {
         ok: false,
@@ -151,33 +220,91 @@ Tweet to parse: ${cleaned}`;
       };
     }
 
-    const question = (parsed.question ?? "").trim();
-    if (question.length < 10 || question.length > 280) {
-      return { ok: false, error: `parsed question length ${question.length} is outside 10-280` };
+    const decisionRaw = String(parsed.decision ?? "")
+      .trim()
+      .toUpperCase();
+    let decision: MentionGateDecision =
+      decisionRaw === "CREATE"
+        ? "create"
+        : decisionRaw === "REJECT"
+          ? "reject"
+          : "clarify";
+
+    // Deterministic override: open-ended text never creates.
+    if (forcedClarify && decision === "create") {
+      decision = "clarify";
     }
 
-    const lower = cleaned.toLowerCase();
-    const isToday = /\b(today|tonight|this (morning|afternoon|evening))\b/.test(lower);
-    const isTomorrow = /\btomorrow\b/.test(lower);
+    const reason =
+      (parsed.reason ?? "").trim() ||
+      (decision === "create"
+        ? "valid binary market"
+        : "not a clean yes/no market");
 
-    let closes_at = defaultClosesAt();
-    if (isToday) {
-      closes_at = endOfToday.toISOString();
-    } else if (isTomorrow) {
-      closes_at = endOfTomorrow.toISOString();
-    } else if ((parsed.closes_at ?? "").trim()) {
-      const d = new Date(parsed.closes_at!);
-      const min = new Date();
-      closes_at = Number.isFinite(d.getTime()) && d > min ? d.toISOString() : defaultClosesAt();
+    const rawSuggestions = Array.isArray(parsed.suggestions)
+      ? parsed.suggestions.map((s) => String(s ?? "").trim()).filter(Boolean)
+      : [];
+    let suggestions = filterBinarySuggestions(rawSuggestions);
+    if (suggestions.length === 0 && decision !== "create") {
+      suggestions = filterBinarySuggestions(heuristicSuggestions(cleaned));
     }
+
+    if (decision !== "create") {
+      return {
+        ok: true,
+        decision,
+        reason: forcedClarify
+          ? `Open-ended question cannot be a single yes/no market. ${reason}`
+          : reason,
+        suggestions,
+      };
+    }
+
+    let question = (parsed.question ?? "").trim();
+    if (!question.endsWith("?") && question.length > 0) {
+      question = `${question}?`;
+    }
+    // Capitalize
+    if (question) {
+      question = question.charAt(0).toUpperCase() + question.slice(1);
+    }
+
+    const validation = validateBinaryQuestion(question);
+    if (!validation.ok) {
+      // Model tried CREATE but failed validation → clarify + suggestions
+      if (suggestions.length === 0) {
+        suggestions = filterBinarySuggestions([
+          ...rawSuggestions,
+          ...heuristicSuggestions(cleaned),
+          question,
+        ]);
+      }
+      return {
+        ok: true,
+        decision: "clarify",
+        reason: validation.reason,
+        suggestions,
+      };
+    }
+
+    const closes_at = resolveClosesAt(
+      cleaned,
+      parsed.closes_at,
+      endOfToday,
+      endOfTomorrow,
+    );
 
     return {
       ok: true,
-      data: {
+      decision: "create",
+      reason,
+      suggestions: [],
+      market: {
         question,
         description: (parsed.description ?? "").trim(),
-        resolution_criteria: (parsed.resolution_criteria ?? "").trim() ||
-          "Resolves based on publicly available information.",
+        resolution_criteria:
+          (parsed.resolution_criteria ?? "").trim() ||
+          "Resolves YES if the stated condition is met per public sources; otherwise NO.",
         category: normalizeCategory(parsed.category ?? "Other"),
         closes_at,
       },
@@ -185,9 +312,29 @@ Tweet to parse: ${cleaned}`;
   } catch (e) {
     return {
       ok: false,
-      error: `grok parse failed: ${e instanceof Error ? e.message : String(e)}`,
+      error: `grok assess failed: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
+}
+
+/**
+ * Backward-compatible wrapper: only succeeds when the gate says CREATE.
+ * Prefer assessMentionWithGrok for mention handling.
+ */
+export async function parseMarketWithGrok(
+  text: string,
+  apiKey: string,
+  opts?: { botUsername?: string; model?: string },
+): Promise<GrokParseResult> {
+  const gate = await assessMentionWithGrok(text, apiKey, opts);
+  if (!gate.ok) return gate;
+  if (gate.decision !== "create" || !gate.market) {
+    return {
+      ok: false,
+      error: gate.reason || `mention gate: ${gate.decision}`,
+    };
+  }
+  return { ok: true, data: gate.market };
 }
 
 export type ResolutionProposal = {

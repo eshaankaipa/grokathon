@@ -2,8 +2,19 @@
  * Mention → market wrapper:
  * parse an @XPredMarkets mention and either create a new market
  * or redirect to an existing one (same tweet, same market id, or same question).
+ *
+ * Only creates when the text is a clean, resolvable yes/no question.
+ * Open-ended / invalid mentions are skipped with binary suggestions the user can reply with.
  */
 
+import {
+  cleanMentionText,
+  filterBinarySuggestions,
+  heuristicSuggestions,
+  looksBinaryQuestion,
+  looksOpenEnded,
+  validateBinaryQuestion,
+} from "./binary_gate";
 import {
   createMarket,
   getMarket,
@@ -14,8 +25,13 @@ import {
 import type { XMention } from "./x";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { SupabaseEnv } from "./supabase";
+import { assessMentionWithGrok } from "./xai";
 
-type MentionEnv = SupabaseEnv & { DB: D1Database };
+type MentionEnv = SupabaseEnv & {
+  DB: D1Database;
+  XAI_API_KEY?: string;
+  BOT_USERNAME?: string;
+};
 
 const WEB_BASE_URL = "https://xmarket.aidenhuang.com";
 const API_BASE_URL = "https://xpred.aidenhuang.com";
@@ -37,6 +53,10 @@ export interface MentionMarketResult {
   og_image?: string;
   /** True when this tweet was already processed before */
   already_processed?: boolean;
+  /** Binary yes/no alternatives when we refuse to create */
+  suggestions?: string[];
+  /** Gate decision detail: reject vs clarify (both map to action=skipped) */
+  gate?: "reject" | "clarify";
 }
 
 export function marketUrls(market: MarketView): { url: string; og_image: string } {
@@ -64,18 +84,7 @@ export function extractQuestion(
   text: string,
   botUsername = "XPredMarkets",
 ): string {
-  let t = text.trim();
-  // remove all @mentions
-  t = t.replace(/@\w+/gi, " ");
-  // common command prefixes
-  t = t.replace(
-    /\b(create|new|open|make|start)?\s*(a\s+)?(market|prediction|bet)\b[:\-]?\s*/gi,
-    " ",
-  );
-  t = t.replace(/\b(please|pls|plz)\b/gi, " ");
-  // drop bare bot name residual
-  t = t.replace(new RegExp(`\\b${botUsername}\\b`, "gi"), " ");
-  t = t.replace(/\s+/g, " ").trim();
+  let t = cleanMentionText(text, botUsername);
   // Prefer text that ends with ? if multi-sentence
   const qMatch = t.match(/[^?]*\?/);
   if (qMatch && qMatch[0].trim().length >= 8) {
@@ -87,7 +96,12 @@ export function extractQuestion(
 export type ParsedMention =
   | { kind: "redirect"; marketId: string; source: "id" | "url" }
   | { kind: "create"; question: string }
-  | { kind: "skip"; reason: string };
+  | {
+      kind: "skip";
+      reason: string;
+      gate?: "reject" | "clarify";
+      suggestions?: string[];
+    };
 
 export function parseMentionText(
   text: string,
@@ -116,19 +130,64 @@ export function parseMentionText(
     return { kind: "redirect", marketId: idMatch[0], source: "id" };
   }
 
-  const question = extractQuestion(raw, botUsername);
-  if (question.length < 8) {
+  const cleaned = cleanMentionText(raw, botUsername);
+  if (cleaned.length < 8) {
     return {
       kind: "skip",
       reason: "no market question found (need ≥8 chars after stripping @mentions)",
     };
   }
   // Must look like a claim / question, not pure emoji noise
-  if (!/[\p{L}\p{N}]/u.test(question)) {
+  if (!/[\p{L}\p{N}]/u.test(cleaned)) {
     return { kind: "skip", reason: "question has no letters/numbers" };
   }
 
-  return { kind: "create", question };
+  // Open-ended / multi-outcome → never create via rule path
+  if (looksOpenEnded(cleaned) && !looksBinaryQuestion(cleaned)) {
+    return {
+      kind: "skip",
+      gate: "clarify",
+      reason:
+        "Open-ended question cannot be a single yes/no market. Reply with one of the suggestions.",
+      suggestions: filterBinarySuggestions(heuristicSuggestions(cleaned)),
+    };
+  }
+
+  let question = extractQuestion(raw, botUsername);
+  if (!question.endsWith("?") && looksBinaryQuestion(question)) {
+    question = `${question.trim()}?`;
+  }
+  if (question) {
+    question = question.charAt(0).toUpperCase() + question.slice(1);
+  }
+
+  const validation = validateBinaryQuestion(
+    question.endsWith("?") ? question : `${question}?`,
+  );
+  if (!validation.ok) {
+    // Allow create path only for already-binary text; otherwise clarify
+    if (!looksBinaryQuestion(cleaned)) {
+      return {
+        kind: "skip",
+        gate: "clarify",
+        reason: validation.reason,
+        suggestions: filterBinarySuggestions(heuristicSuggestions(cleaned)),
+      };
+    }
+  }
+
+  const finalQ = question.endsWith("?") ? question : `${question}?`;
+  const finalCheck = validateBinaryQuestion(finalQ);
+  if (!finalCheck.ok) {
+    return {
+      kind: "skip",
+      gate: "clarify",
+      reason: finalCheck.reason,
+      suggestions: filterBinarySuggestions(heuristicSuggestions(cleaned)),
+    };
+  }
+
+  return { kind: "create", question: finalQ };
 }
 
 export async function getProcessedTweet(
@@ -271,6 +330,8 @@ export async function processMentionToMarket(
       reason: parsed.reason,
       tweet_id: tweetId,
       author_username: input.author_username,
+      suggestions: parsed.suggestions,
+      gate: parsed.gate,
     };
   }
 
@@ -365,6 +426,7 @@ export async function processMentionToMarket(
 
 /**
  * Process a batch of X mentions (from /mentions poll).
+ * Uses Grok binary gate when XAI_API_KEY is configured; otherwise deterministic rules.
  */
 export async function processMentionsBatch(
   env: MentionEnv,
@@ -373,6 +435,8 @@ export async function processMentionsBatch(
     botUsername?: string;
     botUserId?: string;
     liquidity?: number;
+    /** Override: force Grok path on/off. Default: on when XAI_API_KEY set. */
+    useGrok?: boolean;
   } = {},
 ): Promise<{
   results: MentionMarketResult[];
@@ -385,16 +449,29 @@ export async function processMentionsBatch(
   let redirected = 0;
   let skipped = 0;
 
+  const useGrok =
+    opts.useGrok ?? Boolean(env.XAI_API_KEY && String(env.XAI_API_KEY).trim());
+
   for (const m of mentions) {
-    const r = await processMentionToMarket(env, {
-      text: m.text,
-      tweet_id: m.id,
-      author_id: m.author_id,
-      author_username: m.author_username,
-      botUsername: opts.botUsername,
-      botUserId: opts.botUserId,
-      liquidity: opts.liquidity,
-    });
+    const r = useGrok
+      ? await processMentionWithGate(env, {
+          text: m.text,
+          tweet_id: m.id,
+          author_id: m.author_id,
+          author_username: m.author_username,
+          botUsername: opts.botUsername,
+          botUserId: opts.botUserId,
+          liquidity: opts.liquidity,
+        })
+      : await processMentionToMarket(env, {
+          text: m.text,
+          tweet_id: m.id,
+          author_id: m.author_id,
+          author_username: m.author_username,
+          botUsername: opts.botUsername,
+          botUserId: opts.botUserId,
+          liquidity: opts.liquidity,
+        });
     if (!r.ok) {
       results.push({
         action: "skipped",
@@ -416,14 +493,244 @@ export async function processMentionsBatch(
   return { results, created, redirected, skipped };
 }
 
+/**
+ * Grok-gated mention processing (preferred when XAI_API_KEY is set).
+ * CREATE only for validated yes/no; otherwise skip with suggestions.
+ */
+export async function processMentionWithGate(
+  env: MentionEnv,
+  input: {
+    text: string;
+    tweet_id?: string;
+    author_id?: string | null;
+    author_username?: string | null;
+    botUsername?: string;
+    botUserId?: string;
+    liquidity?: number;
+    force_create?: boolean;
+  },
+): Promise<Result<MentionMarketResult>> {
+  const tweetId = input.tweet_id?.trim();
+  const botUsername = input.botUsername ?? env.BOT_USERNAME ?? "XPredMarkets";
+
+  if (input.botUserId && input.author_id && input.botUserId === input.author_id) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: "self-mention from bot",
+      tweet_id: tweetId,
+      author_username: input.author_username,
+    };
+  }
+
+  if (tweetId) {
+    const prev = await getProcessedTweet(env, tweetId);
+    if (prev) {
+      const m = await getMarket(env, prev.market_id);
+      if (m.ok) {
+        return {
+          ok: true,
+          ...pack("redirected", m.market, {
+            already_processed: true,
+            reason: "tweet already linked to market",
+            tweet_id: tweetId,
+            author_username: input.author_username,
+          }),
+        };
+      }
+    }
+  }
+
+  // Redirects + trivial skips stay rule-based — no LLM needed.
+  // Open-ended / clarify cases still go to Grok for better yes/no suggestions.
+  const parsed = parseMentionText(input.text, {
+    botUsername,
+    botUserId: input.botUserId,
+    authorId: input.author_id ?? undefined,
+  });
+  if (parsed.kind === "redirect") {
+    const m = await getMarket(env, parsed.marketId);
+    if (!m.ok) {
+      return { ok: false, error: `market ${parsed.marketId} not found` };
+    }
+    if (tweetId) {
+      await saveProcessed(env, {
+        tweet_id: tweetId,
+        market_id: m.market.id,
+        action: "redirected",
+        question: m.market.question,
+        author_id: input.author_id,
+        author_username: input.author_username,
+        mention_text: input.text,
+      });
+    }
+    return {
+      ok: true,
+      ...pack("redirected", m.market, {
+        reason: `explicit market ${parsed.source}`,
+        tweet_id: tweetId,
+        author_username: input.author_username,
+      }),
+    };
+  }
+  if (
+    parsed.kind === "skip" &&
+    (parsed.reason === "empty mention" ||
+      parsed.reason === "self-mention from bot" ||
+      parsed.reason === "question has no letters/numbers" ||
+      parsed.reason.startsWith("no market question found"))
+  ) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: parsed.reason,
+      tweet_id: tweetId,
+      author_username: input.author_username,
+    };
+  }
+
+  const apiKey = env.XAI_API_KEY?.trim();
+  if (!apiKey) {
+    // Fall back to deterministic path (also rejects open-ended)
+    return processMentionToMarket(env, input);
+  }
+
+  const gate = await assessMentionWithGrok(input.text, apiKey, { botUsername });
+  if (!gate.ok) {
+    // On Grok failure: do NOT create — skip with heuristic suggestions
+    const cleaned = cleanMentionText(input.text, botUsername);
+    return {
+      ok: true,
+      action: "skipped",
+      gate: "clarify",
+      reason: `Could not assess mention (${gate.error}). Try a clear yes/no question.`,
+      suggestions: filterBinarySuggestions(heuristicSuggestions(cleaned)),
+      tweet_id: tweetId,
+      author_username: input.author_username,
+    };
+  }
+
+  if (gate.decision !== "create" || !gate.market) {
+    return {
+      ok: true,
+      action: "skipped",
+      gate: gate.decision === "reject" ? "reject" : "clarify",
+      reason: gate.reason,
+      suggestions: gate.suggestions,
+      tweet_id: tweetId,
+      author_username: input.author_username,
+      question: gate.market?.question,
+    };
+  }
+
+  // Dedupe by question unless force_create
+  if (!input.force_create) {
+    const existing = await findOpenByQuestion(env, gate.market.question);
+    if (existing) {
+      if (tweetId) {
+        await saveProcessed(env, {
+          tweet_id: tweetId,
+          market_id: existing.id,
+          action: "redirected",
+          question: existing.question,
+          author_id: input.author_id,
+          author_username: input.author_username,
+          mention_text: input.text,
+        });
+      }
+      return {
+        ok: true,
+        ...pack("redirected", existing, {
+          reason: "matching open/locked market question",
+          tweet_id: tweetId,
+          author_username: input.author_username,
+        }),
+      };
+    }
+  }
+
+  const closesAt = gate.market.closes_at
+    ? Math.floor(new Date(gate.market.closes_at).getTime() / 1000)
+    : undefined;
+  const sourceUrl = tweetId
+    ? `https://x.com/i/web/status/${tweetId}`
+    : undefined;
+
+  const created = await createMarket(env, {
+    question: gate.market.question,
+    description: gate.market.description,
+    rules: gate.market.resolution_criteria,
+    category: gate.market.category,
+    resolve_by: closesAt,
+    source_tweet_id: tweetId,
+    source_tweet_url: sourceUrl,
+    liquidity: input.liquidity,
+    created_by: input.author_username
+      ? `mention:@${input.author_username}`
+      : "mention",
+  });
+  if (!created.ok) return created;
+
+  if (tweetId) {
+    await saveProcessed(env, {
+      tweet_id: tweetId,
+      market_id: created.market.id,
+      action: "created",
+      question: created.market.question,
+      author_id: input.author_id,
+      author_username: input.author_username,
+      mention_text: input.text,
+    });
+  }
+
+  return {
+    ok: true,
+    ...pack("created", created.market, {
+      reason: gate.reason || "new market from gated mention",
+      tweet_id: tweetId,
+      author_username: input.author_username,
+    }),
+  };
+}
+
 /** Build a reply tweet body for the bot (optional announce). */
 export function formatMarketReply(result: MentionMarketResult): string | null {
-  if (!result.market_id || !result.url) return null;
-  if (result.action === "created") {
+  if (result.action === "created" && result.market_id && result.url) {
     return `Market open: ${result.question}\n\nTrade: ${result.url}`;
   }
-  if (result.action === "redirected") {
+  if (result.action === "redirected" && result.url) {
     return `That market already exists — jump in:\n${result.url}`;
   }
+  if (result.action === "skipped") {
+    return formatSkipReply(result);
+  }
   return null;
+}
+
+/** Helpful reply when we refuse to create — include yes/no suggestions. */
+export function formatSkipReply(result: MentionMarketResult): string | null {
+  const suggestions = (result.suggestions ?? []).filter(Boolean).slice(0, 2);
+  if (suggestions.length === 0 && !result.reason) return null;
+
+  const header =
+    result.gate === "reject"
+      ? "Can't open a market on that."
+      : "That isn't a yes/no market yet.";
+
+  const lines = [header];
+  if (suggestions.length > 0) {
+    lines.push("Try one of these and tag me again:");
+    for (const s of suggestions) {
+      lines.push(`• ${s}`);
+    }
+  } else if (result.reason) {
+    lines.push(result.reason.slice(0, 160));
+  }
+
+  let text = lines.join("\n");
+  // X hard limit
+  if (text.length > 280) {
+    text = text.slice(0, 277).trimEnd() + "…";
+  }
+  return text;
 }
