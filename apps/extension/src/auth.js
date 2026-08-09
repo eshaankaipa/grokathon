@@ -1,5 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
-import { DEFAULT_SUPABASE_PUBLISHABLE_KEY, DEFAULT_SUPABASE_URL } from "./config.js";
+import {
+  DEFAULT_MARKET_ORIGIN,
+  DEFAULT_SUPABASE_PUBLISHABLE_KEY,
+  DEFAULT_SUPABASE_URL,
+  normalizeMarketOrigin,
+} from "./config.js";
 
 const AUTH_STORAGE_KEY = "signal-extension-auth";
 let cachedClient = null;
@@ -108,8 +113,13 @@ function randomState() {
 
 export async function connectWithWebsite() {
   const client = await getClient();
-  const { marketOrigin = "" } = await chrome.storage.sync.get("marketOrigin");
-  if (!marketOrigin) throw new Error("The market website is not configured.");
+  const { marketOrigin: storedMarketOrigin = DEFAULT_MARKET_ORIGIN } = await chrome.storage.sync.get({
+    marketOrigin: DEFAULT_MARKET_ORIGIN,
+  });
+  const marketOrigin = normalizeMarketOrigin(storedMarketOrigin);
+  if (marketOrigin !== storedMarketOrigin) {
+    await chrome.storage.sync.set({ marketOrigin });
+  }
 
   const callbackUrl = chrome.identity.getRedirectURL("supabase-auth");
   const state = randomState();

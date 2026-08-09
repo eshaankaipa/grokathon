@@ -17,7 +17,7 @@ import type { SupabaseEnv } from "./supabase";
 
 type MentionEnv = SupabaseEnv & { DB: D1Database };
 
-const WEB_BASE_URL = "https://xmarket.aidenhuang.com";
+const WEB_BASE_URL = "https://xpred.aidenhuang.com";
 const API_BASE_URL = "https://xpred.aidenhuang.com";
 const MARKET_ID_RE = /\bmkt_[a-f0-9]{16,}\b/i;
 const MARKET_URL_RE =

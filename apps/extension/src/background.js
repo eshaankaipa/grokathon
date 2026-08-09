@@ -13,6 +13,7 @@ import {
   DEFAULT_MARKET_ORIGIN,
   DEFAULT_SUPABASE_PUBLISHABLE_KEY,
   DEFAULT_SUPABASE_URL,
+  normalizeMarketOrigin,
 } from "./config.js";
 
 const responseCache = new Map();
@@ -24,8 +25,13 @@ async function getSettings() {
     supabaseUrl: DEFAULT_SUPABASE_URL,
     supabasePublishableKey: DEFAULT_SUPABASE_PUBLISHABLE_KEY,
   });
+  const storedMarketOrigin = values.marketOrigin.replace(/\/$/, "");
+  const marketOrigin = normalizeMarketOrigin(storedMarketOrigin);
+  if (marketOrigin !== storedMarketOrigin) {
+    await chrome.storage.sync.set({ marketOrigin });
+  }
   return {
-    marketOrigin: values.marketOrigin.replace(/\/$/, ""),
+    marketOrigin,
     supabaseUrl: values.supabaseUrl.replace(/\/$/, ""),
     supabasePublishableKey: values.supabasePublishableKey,
   };
@@ -87,8 +93,9 @@ chrome.runtime.onInstalled.addListener(async () => {
     "supabaseUrl",
     "supabasePublishableKey",
   ]);
+  const storedMarketOrigin = values.marketOrigin?.replace(/\/$/, "") || "";
   await chrome.storage.sync.set({
-    marketOrigin: values.marketOrigin || DEFAULT_MARKET_ORIGIN,
+    marketOrigin: normalizeMarketOrigin(storedMarketOrigin),
     supabaseUrl: values.supabaseUrl || DEFAULT_SUPABASE_URL,
     supabasePublishableKey:
       values.supabasePublishableKey || DEFAULT_SUPABASE_PUBLISHABLE_KEY,

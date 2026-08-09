@@ -5,8 +5,8 @@ Manifest V3 Chrome extension that recognizes canonical xmarket URLs on X and ren
 ## Current behavior
 
 - Watches X's dynamically rendered timeline and conversation pages
-- Detects canonical URLs in both links and raw tweet text (localhost is not linkified by X)
-- Recognizes `http://localhost:5175/market/{marketId}` during development
+- Detects canonical URLs in both links and raw tweet text
+- Recognizes `https://xpred.aidenhuang.com/market/{marketId}`
 - Fetches canonical market data from the Supabase `markets` table through a background worker
 - Displays an explicit error when a slug is missing or Supabase is unavailable
 - Injects UI inside Shadow DOM to isolate it from X's styles
@@ -27,7 +27,7 @@ npm run build
 
 Then open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `apps/extension/dist`.
 
-The canonical market origin and Supabase publishable configuration live in `src/config.js`. The default market origin is `http://localhost:5175`.
+The canonical market origin and Supabase publishable configuration live in `src/config.js`. The default market origin is `https://xpred.aidenhuang.com`.
 
 ## Account setup
 

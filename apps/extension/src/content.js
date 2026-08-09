@@ -1,10 +1,12 @@
+import { DEFAULT_MARKET_ORIGIN } from "./config.js";
+
 const HOST_ATTRIBUTE = "data-signal-market-card";
 const EMBED_VERSION_ATTRIBUTE = "data-xmarket-embed-version";
-const EMBED_VERSION = "0.3.2";
+const EMBED_VERSION = "0.3.4";
 let processedAnchors = new WeakSet();
 let processedArticleText = new WeakMap();
 let scanScheduled = false;
-let configuredOrigin = "http://localhost:5175";
+let configuredOrigin = DEFAULT_MARKET_ORIGIN;
 
 const compactNumber = new Intl.NumberFormat("en-US", {
   notation: "compact",
@@ -357,7 +359,7 @@ async function start() {
     const response = await chrome.runtime.sendMessage({ type: "SIGNAL_GET_SETTINGS" });
     if (response?.marketOrigin) configuredOrigin = response.marketOrigin;
   } catch {
-    // The default localhost origin keeps development usable if the worker reloads.
+    // Keep using the bundled production origin if the worker is still starting.
   }
   scanForMarkets();
   new MutationObserver(scheduleScan).observe(document.body, { childList: true, subtree: true });
