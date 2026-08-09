@@ -262,8 +262,12 @@ export interface XSearchTweet {
   id: string;
   text: string;
   author_id?: string;
+  author_username?: string;
+  author_name?: string;
+  author_avatar_url?: string;
   created_at?: string;
   public_metrics?: Record<string, number>;
+  url?: string;
 }
 
 export interface XTrend {
@@ -342,21 +346,46 @@ export async function xBearerSearch(
   url.searchParams.set("query", query);
   url.searchParams.set("max_results", String(Math.min(Math.max(maxResults, 10), 100)));
   url.searchParams.set("tweet.fields", "created_at,public_metrics,author_id");
+  url.searchParams.set("expansions", "author_id");
+  url.searchParams.set("user.fields", "username,name,profile_image_url");
   url.searchParams.set("sort_order", "relevancy");
   const res = await fetch(url.toString(), { headers: xBearerHeaders(bearer) });
   const body = (await res.json()) as {
     data?: Array<Record<string, unknown>>;
+    includes?: { users?: Array<Record<string, unknown>> };
     errors?: unknown;
   };
   if (!res.ok) {
     return { ok: false, status: res.status, error: body };
   }
-  const tweets: XSearchTweet[] = (body.data ?? []).map((t) => ({
-    id: String(t.id),
-    text: String(t.text ?? ""),
-    author_id: t.author_id ? String(t.author_id) : undefined,
-    created_at: t.created_at as string | undefined,
-    public_metrics: t.public_metrics as Record<string, number> | undefined,
-  }));
+  const usersById = new Map<
+    string,
+    { username?: string; name?: string; avatar?: string }
+  >();
+  for (const u of body.includes?.users ?? []) {
+    usersById.set(String(u.id), {
+      username: u.username as string | undefined,
+      name: u.name as string | undefined,
+      avatar: u.profile_image_url as string | undefined,
+    });
+  }
+  const tweets: XSearchTweet[] = (body.data ?? []).map((t) => {
+    const id = String(t.id);
+    const authorId = t.author_id ? String(t.author_id) : undefined;
+    const author = authorId ? usersById.get(authorId) : undefined;
+    return {
+      id,
+      text: String(t.text ?? ""),
+      author_id: authorId,
+      author_username: author?.username,
+      author_name: author?.name,
+      author_avatar_url: author?.avatar,
+      created_at: t.created_at as string | undefined,
+      public_metrics: t.public_metrics as Record<string, number> | undefined,
+      url: author?.username
+        ? `https://x.com/${author.username}/status/${id}`
+        : `https://x.com/i/status/${id}`,
+    };
+  });
   return { ok: true, tweets };
 }

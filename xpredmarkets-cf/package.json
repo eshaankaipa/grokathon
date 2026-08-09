@@ -7,7 +7,7 @@
     "deploy": "wrangler deploy",
     "tail": "wrangler tail",
     "types": "wrangler types",
-    "test": "npx --yes tsx --test src/binary_gate.test.ts",
+    "test": "npx --yes tsx --test src/binary_gate.test.ts src/market_tweets.test.ts",
     "test:gate": "node scripts/test-mention-gate.mjs",
     "db:apply": "wrangler d1 migrations apply xpredmarkets-db --remote",
     "db:apply:local": "wrangler d1 migrations apply xpredmarkets-db --local",

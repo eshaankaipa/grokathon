@@ -257,3 +257,86 @@ export function subscribeToMarket(slug, onChange) {
     .subscribe();
   return () => { supabase.removeChannel(channel); };
 }
+
+const RELATED_TWEET_FIELDS = [
+  "id",
+  "market_id",
+  "tweet_id",
+  "author_id",
+  "author_username",
+  "author_name",
+  "author_avatar_url",
+  "text",
+  "tweet_url",
+  "like_count",
+  "repost_count",
+  "reply_count",
+  "impression_count",
+  "relevance_score",
+  "rank",
+  "is_source",
+  "tweet_created_at",
+].join(",");
+
+export function mapRelatedTweet(record) {
+  return {
+    id: record.id,
+    marketId: record.market_id,
+    tweetId: record.tweet_id,
+    authorId: record.author_id,
+    authorUsername: record.author_username,
+    authorName: record.author_name,
+    authorAvatarUrl: record.author_avatar_url,
+    text: record.text,
+    tweetUrl: record.tweet_url,
+    likeCount: Number(record.like_count || 0),
+    repostCount: Number(record.repost_count || 0),
+    replyCount: Number(record.reply_count || 0),
+    impressionCount: Number(record.impression_count || 0),
+    relevanceScore: Number(record.relevance_score || 0),
+    rank: Number(record.rank || 0),
+    isSource: Boolean(record.is_source),
+    tweetCreatedAt: record.tweet_created_at,
+  };
+}
+
+/** Top related X posts for a market (public read). */
+export async function getRelatedTweets(marketDbId, limit = 6) {
+  if (!marketDbId) return [];
+  const client = requireClient();
+  const { data, error } = await client
+    .from("market_related_tweets")
+    .select(RELATED_TWEET_FIELDS)
+    .eq("market_id", marketDbId)
+    .order("rank", { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map(mapRelatedTweet);
+}
+
+/**
+ * Batch-load top related tweets for many markets (home cards).
+ * Returns Map<marketDbId, tweets[]>.
+ */
+export async function getRelatedTweetsForMarkets(marketDbIds, perMarket = 2) {
+  const ids = [...new Set((marketDbIds || []).filter(Boolean))];
+  const byMarket = new Map(ids.map((id) => [id, []]));
+  if (!ids.length) return byMarket;
+
+  const client = requireClient();
+  const { data, error } = await client
+    .from("market_related_tweets")
+    .select(RELATED_TWEET_FIELDS)
+    .in("market_id", ids)
+    .order("rank", { ascending: true })
+    .limit(Math.min(ids.length * Math.max(perMarket, 1) * 3, 400));
+  if (error) throw error;
+
+  for (const row of data || []) {
+    const list = byMarket.get(row.market_id) || [];
+    if (list.length >= perMarket) continue;
+    list.push(mapRelatedTweet(row));
+    byMarket.set(row.market_id, list);
+  }
+  return byMarket;
+}

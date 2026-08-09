@@ -13,6 +13,7 @@ import {
 import { processMentionToSupabase, type MentionSupabaseEnv } from "./mention_supabase";
 import { xBearerCounts, xBearerSearch, xBearerTrends, type XSearchTweet } from "./x";
 import { xCreateTweet, type XCreds } from "./x";
+import { attachRelatedTweets } from "./market_tweets";
 
 type SweeperEnv = MentionSupabaseEnv & {
   DB: D1Database;
@@ -188,6 +189,15 @@ export async function runSweeper(
     if (mention.action === "created" && mention.market_id) {
       created++;
       results.push({ name: c.name, decision: c.decision, score: c.score, marketId: mention.market_id });
+      // Tag the most relevant conversation posts under the new market
+      if (mention.market) {
+        const tagged = await attachRelatedTweets(env, mention.market);
+        if (!tagged.ok) {
+          console.log(
+            `sweeper: related tweets failed for ${mention.market_id}: ${tagged.error}`,
+          );
+        }
+      }
 
       if (creds && mention.url) {
         const tweet = formatMarketReply(mention);
