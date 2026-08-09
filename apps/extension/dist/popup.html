@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><link rel="stylesheet" href="popup.css" /><title>xmarket</title></head>
+  <body>
+    <main>
+      <header><span class="mark">↗</span><div><strong>xmarket</strong><small>Markets on X</small></div><span class="status" id="status">Loading</span></header>
+
+      <section class="account-section">
+        <span class="section-label">Trading account</span>
+        <div id="account-loading" class="account-loading">Checking your session…</div>
+        <div id="account-signed-out" class="hidden">
+          <div class="account-copy"><strong>Use your xmarket account</strong><p>Connect through the website to use the same account and portfolio.</p></div>
+          <button id="connect-website" class="primary" type="button">Continue on website</button>
+          <div class="auth-divider"><span>or use email</span></div>
+          <form id="email-auth-form">
+            <label for="auth-email">Email</label>
+            <input id="auth-email" type="email" autocomplete="email" required />
+            <label for="auth-password">Password</label>
+            <input id="auth-password" type="password" autocomplete="current-password" minlength="6" required />
+            <button id="sign-in" class="primary" type="submit">Sign in</button>
+            <button id="sign-up" class="secondary" type="button">Create account</button>
+          </form>
+        </div>
+        <div id="account-signed-in" class="hidden">
+          <div class="user-row"><div id="avatar" class="avatar">X</div><div><strong id="user-name">xmarket trader</strong><small id="user-detail">Connected</small></div></div>
+          <button id="sign-out" class="secondary">Sign out</button>
+        </div>
+        <div id="auth-message" role="status"></div>
+      </section>
+
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

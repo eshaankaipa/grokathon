@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" id="theme-color" />
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem("xmarket-theme");
+          const theme = saved === "dark" || saved === "light"
+            ? saved
+            : matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+          document.querySelector("#theme-color").content = theme === "dark" ? "#000000" : "#ffffff";
+        } catch {}
+      })();
+    </script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='20' fill='%23161914'/%3E%3Cpath d='M16 39l10-10 8 8 14-17M39 20h9v9' fill='none' stroke='%23d9f55f' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <meta
+      name="description"
+      content="Turn the conversations shaping X into prediction markets."
+    />
+    <title>xmarket — Trade what happens next</title>
+    <script type="module" crossorigin src="/assets/index-BsI3fL6z.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Cll936uo.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

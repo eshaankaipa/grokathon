@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "xmarket",
+  "description": "View prediction markets inline while browsing conversations on X.",
+  "version": "0.3.4",
+  "permissions": ["storage", "identity"],
+  "host_permissions": [
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://t.co/*",
+    "https://xmarket.aidenhuang.com/*",
+    "http://localhost/*",
+    "https://fxoiyujqvfnclobriker.supabase.co/*"
+  ],
+  "optional_host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "xmarket",
+    "default_popup": "popup.html"
+  }
+}
