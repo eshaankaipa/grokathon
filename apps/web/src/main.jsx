@@ -43,7 +43,7 @@ const money = (value) =>
 const compact = (value) =>
   new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
-function Sparkline({ values, positive = true, large = false }) {
+function Sparkline({ values, trend = "flat", large = false }) {
   const width = large ? 720 : 240;
   const height = large ? 210 : 64;
   const min = Math.min(...values) - 4;
@@ -58,7 +58,7 @@ function Sparkline({ values, positive = true, large = false }) {
   return (
     <svg className={`sparkline ${large ? "sparkline-large" : ""}`} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       {large && <line x1="0" y1={height - 1} x2={width} y2={height - 1} className="chart-base" />}
-      <polyline points={points} className={positive ? "line-positive" : "line-negative"} />
+      <polyline points={points} className={`line-${trend}`} />
     </svg>
   );
 }
@@ -140,7 +140,7 @@ function MarketCard({ market, onOpen, featured = false }) {
           <strong>{Math.round(market.yesPrice * 100)}%</strong>
           <span>chance</span>
         </div>
-        <Sparkline values={market.spark} positive={market.change >= 0} />
+        <Sparkline values={market.spark} trend={market.trend} />
       </div>
       <div className="card-footer">
         <span>{money(market.volume)} volume</span>
@@ -363,9 +363,9 @@ function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) 
           <div className="chart-card">
             <div className="chart-head">
               <div><strong>{Math.round(market.yesPrice * 100)}%</strong><span>chance of YES</span></div>
-              <span className={market.change >= 0 ? "change-badge up" : "change-badge down"}>{market.change >= 0 ? "+" : ""}{market.change}¢ over 7 days</span>
+              <span className={`change-badge ${market.trend}`}>{market.trend === "up" ? "+" : ""}{market.change}¢ over 7 days</span>
             </div>
-            <Sparkline values={market.spark} positive={market.change >= 0} large />
+            <Sparkline values={market.spark} trend={market.trend} large />
             <div className="chart-axis"><span>7 days ago</span><span>Today</span></div>
           </div>
           <div className="market-stats">

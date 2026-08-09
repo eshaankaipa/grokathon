@@ -33,6 +33,7 @@ export function mapMarket(record, history = []) {
   const historyValues = history.map((point) => Number(point.yes_price) * 100);
   const spark = historyValues.length > 1 ? historyValues : [yesPrice * 100, yesPrice * 100];
   const firstPrice = spark[0] / 100;
+  const priceDelta = yesPrice - firstPrice;
   return {
     dbId: record.id,
     id: record.slug,
@@ -41,7 +42,8 @@ export function mapMarket(record, history = []) {
     description: record.description,
     resolutionCriteria: record.resolution_criteria,
     yesPrice,
-    change: Math.round((yesPrice - firstPrice) * 100),
+    change: Math.round(priceDelta * 100),
+    trend: priceDelta > 0 ? "up" : priceDelta < 0 ? "down" : "flat",
     volume: Number(record.volume),
     traders: Number(record.trader_count),
     liquidityParameter: Number(record.liquidity_parameter || 1000),
@@ -75,7 +77,30 @@ export async function listMarkets() {
     .in("status", ["open", "closed", "resolved"])
     .order("volume", { ascending: false });
   if (error) throw error;
-  return (data || []).map((record) => mapMarket(record));
+
+  const markets = data || [];
+  if (!markets.length) return [];
+
+  const { data: history, error: historyError } = await client
+    .from("market_price_history")
+    .select("market_id,yes_price,recorded_at")
+    .in("market_id", markets.map((market) => market.id))
+    .gte("recorded_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+    .order("recorded_at", { ascending: true })
+    .limit(2000);
+
+  const historyByMarket = new Map();
+  if (!historyError) {
+    for (const point of history || []) {
+      const points = historyByMarket.get(point.market_id) || [];
+      points.push(point);
+      historyByMarket.set(point.market_id, points);
+    }
+  }
+
+  return markets.map((record) =>
+    mapMarket(record, historyByMarket.get(record.id)?.slice(-120) || []),
+  );
 }
 
 export async function getMarket(slug) {

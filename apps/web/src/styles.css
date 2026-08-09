@@ -84,7 +84,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid rgba(78, 92, 220,
 .probability span { display: block; font: 500 10px "DM Mono"; color: var(--muted); margin-top: 7px; text-transform: uppercase; }
 .sparkline { width: 100%; height: 64px; overflow: visible; }
 .sparkline polyline { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
-.line-positive { stroke: var(--green); } .line-negative { stroke: var(--red); }.chart-base { stroke: var(--line); stroke-dasharray: 4 5; }
+.line-up { stroke: var(--green); } .line-down { stroke: var(--red); } .line-flat { stroke: var(--muted); }.chart-base { stroke: var(--line); stroke-dasharray: 4 5; }
 .card-footer { border-top: 1px solid var(--line); margin-top: 22px; padding-top: 15px; display: flex; align-items: center; gap: 20px; color: var(--muted); font: 500 10px "DM Mono"; text-transform: uppercase; }
 .card-footer button { margin-left: auto; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; }
 .empty-state { border: 1px dashed #c4c1b6; padding: 70px; text-align: center; border-radius: 16px; color: var(--muted); }.empty-state h3 { color: var(--ink); margin-bottom: 5px; }.empty-state p { margin: 0; }
@@ -227,8 +227,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid rgba(15, 20, 25, 
 .card-footer { color: var(--muted); font-size: 11px; }
 .card-footer button { width: 30px; height: 30px; border-radius: 50%; color: var(--action); }
 .card-footer button:hover { background: var(--action-wash); }
-.line-positive { stroke: var(--action); }
-.line-negative { stroke: var(--red); }
+.line-up { stroke: var(--green); }
+.line-down { stroke: var(--red); }
+.line-flat { stroke: var(--muted); }
 .empty-state { border-color: #cfd9de; border-radius: 16px; }
 
 .conversation-banner { max-width: 1024px; min-height: 220px; margin-bottom: 80px; border-radius: 16px; background: #0f1419; }
@@ -243,7 +244,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid rgba(15, 20, 25, 
 .market-main > h1 { letter-spacing: -2px; }
 .chart-card, .market-stats, .trade-panel, .balance-card, .positions-table, .credit-packs button { border-color: var(--line); border-radius: 16px; background: #fff; }
 .chart-card { box-shadow: none; }
-.change-badge { background: #e6f8f1; }
+.change-badge.up { background: #e6f8f1; }
+.change-badge.down { background: #fee8ea; }
+.change-badge.flat { background: #eff3f4; color: var(--muted); }
 .trade-panel { top: 84px; border-color: #cfd9de; box-shadow: none; }
 .trade-heading small { color: var(--action); font-family: inherit; letter-spacing: 0; text-transform: none; }
 .side-toggle button { border-radius: 999px; background: #fff; font-size: 13px; font-weight: 700; }
@@ -397,7 +400,9 @@ html[data-theme="dark"] .order-summary,
 html[data-theme="dark"] .order-summary .potential,
 html[data-theme="dark"] .position-row { border-color: #2f3336; }
 html[data-theme="dark"] .source-context a { color: #e7e9ea; }
-html[data-theme="dark"] .change-badge { background: rgba(0,186,124,.14); }
+html[data-theme="dark"] .change-badge.up { background: rgba(0,186,124,.14); }
+html[data-theme="dark"] .change-badge.down { background: rgba(244,33,46,.14); }
+html[data-theme="dark"] .change-badge.flat { background: #16181c; }
 html[data-theme="dark"] .side-toggle button { border-color: #536471; background: #000; }
 html[data-theme="dark"] .side-toggle button.selected.yes { background: rgba(0,186,124,.13); }
 html[data-theme="dark"] .side-toggle button.selected.no { background: rgba(244,33,46,.13); }
