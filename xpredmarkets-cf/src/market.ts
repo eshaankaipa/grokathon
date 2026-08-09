@@ -344,6 +344,18 @@ export async function createMarket(
 ): Promise<Result<{ market: MarketView }>> {
   const question = (opts.question ?? "").trim();
   if (!question) return { ok: false, error: "question is required" };
+
+  // Guard against exact-question duplicates from the admin / mention path.
+  const supabase = getSupabase(env);
+  const { data: existing } = await supabase
+    .from("markets")
+    .select("id")
+    .eq("question", question)
+    .maybeSingle();
+  if (existing) {
+    return { ok: false, error: `A market with that exact question already exists (${existing.id})` };
+  }
+
   let liquidity = opts.liquidity ?? DEFAULT_LIQUIDITY;
   if (!Number.isFinite(liquidity) || liquidity < MIN_LIQUIDITY) return { ok: false, error: `liquidity must be at least ${MIN_LIQUIDITY}` };
   liquidity = round8(liquidity);
