@@ -115,7 +115,19 @@ export async function getPositions() {
   const { data, error } = await client
     .from("positions")
     .select("market_id,outcome,shares,average_price,updated_at,markets(id,slug,question,yes_price,status,outcome)")
+    .gt("shares", 0)
     .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getMarketPositions(marketId) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("positions")
+    .select("outcome,shares,average_price")
+    .eq("market_id", marketId)
+    .gt("shares", 0);
   if (error) throw error;
   return data || [];
 }
@@ -132,11 +144,30 @@ export async function buyPosition({ marketSlug, outcome, amount, clientOrderId }
   return data;
 }
 
+export async function sellPosition({ marketSlug, outcome, shares, clientOrderId }) {
+  const client = requireClient();
+  const { data, error } = await client.rpc("sell_market_position", {
+    p_market_slug: marketSlug,
+    p_outcome: outcome,
+    p_shares: shares,
+    p_client_order_id: clientOrderId,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export function estimateLmsrShares(market, outcome, amount) {
   const sidePrice = outcome === "YES" ? market.yesPrice : 1 - market.yesPrice;
   const liquidity = market.liquidityParameter;
   if (!amount || amount <= 0 || !sidePrice || !liquidity) return 0;
   return liquidity * Math.log((Math.exp(amount / liquidity) - (1 - sidePrice)) / sidePrice);
+}
+
+export function estimateLmsrSaleProceeds(market, outcome, shares) {
+  const sidePrice = outcome === "YES" ? market.yesPrice : 1 - market.yesPrice;
+  const liquidity = market.liquidityParameter;
+  if (!shares || shares <= 0 || !sidePrice || !liquidity) return 0;
+  return -liquidity * Math.log((1 - sidePrice) + sidePrice * Math.exp(-shares / liquidity));
 }
 
 export function subscribeToMarket(slug, onChange) {

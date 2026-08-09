@@ -182,6 +182,37 @@ export async function buyPosition({ marketSlug, outcome, amount, clientOrderId }
   return data;
 }
 
+export async function getMarketPositions(marketSlug) {
+  const client = await getClient();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!sessionData.session) return [];
+
+  const { data, error } = await client
+    .from("positions")
+    .select("outcome,shares,average_price,markets!inner(slug)")
+    .eq("markets.slug", marketSlug)
+    .gt("shares", 0);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function sellPosition({ marketSlug, outcome, shares, clientOrderId }) {
+  const client = await getClient();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) throw sessionError;
+  if (!sessionData.session) throw new Error("Connect your xmarket account before trading.");
+
+  const { data, error } = await client.rpc("sell_market_position", {
+    p_market_slug: marketSlug,
+    p_outcome: outcome,
+    p_shares: shares,
+    p_client_order_id: clientOrderId,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   const client = await getClient();
   const { error } = await client.auth.signOut();

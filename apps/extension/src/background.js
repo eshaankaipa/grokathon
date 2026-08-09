@@ -2,7 +2,9 @@ import {
   buyPosition,
   connectWithWebsite,
   getAuthState,
+  getMarketPositions,
   resetAuthClient,
+  sellPosition,
   signInWithEmail,
   signOut,
   signUpWithEmail,
@@ -119,6 +121,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "SIGNAL_GET_MARKET_POSITIONS") {
+    getMarketPositions(message.marketSlug)
+      .then((positions) => sendResponse({ ok: true, positions }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   if (message?.type === "SIGNAL_CONNECT_WEBSITE") {
     connectWithWebsite()
       .then((user) => sendResponse({ ok: true, user }))
@@ -145,6 +154,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       marketSlug: message.marketSlug,
       outcome: message.outcome,
       amount: message.amount,
+      clientOrderId: message.clientOrderId,
+    })
+      .then((result) => {
+        responseCache.clear();
+        sendResponse({ ok: true, result });
+      })
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === "SIGNAL_SELL_POSITION") {
+    sellPosition({
+      marketSlug: message.marketSlug,
+      outcome: message.outcome,
+      shares: message.shares,
       clientOrderId: message.clientOrderId,
     })
       .then((result) => {

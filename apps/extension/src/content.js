@@ -110,6 +110,7 @@ function cardStyles() {
     .chance strong { display:block; font-size:39px; line-height:.9; letter-spacing:-2.4px; font-weight:900; }.chance span { display:block; margin-top:7px; color:var(--muted); font-size:8px; font-weight:800; text-transform:uppercase; letter-spacing:.8px; }
     .bar { height:4px; background:var(--soft-line); overflow:hidden; }.bar span { display:block; height:100%; background:var(--ink); }.market-stats { display:flex; gap:15px; color:var(--muted); font-size:9px; font-weight:600; margin-top:9px; }
     .trade { border-top:1px solid var(--line); padding:18px var(--card-pad) 20px; background:var(--surface-2); }
+    .order-type { display:grid; grid-template-columns:1fr 1fr; gap:3px; padding:3px; margin-bottom:7px; border-radius:999px; background:var(--soft-line); }.order-type button { height:27px; border:0; border-radius:999px; background:transparent; color:var(--muted); font-size:9px; font-weight:800; }.order-type button.selected { background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(15,20,25,.14); }
     .side-row, .amount-row { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
     button { font:inherit; cursor:pointer; }.side { min-height:39px; border:1px solid var(--line); border-radius:8px; padding:0 12px; display:flex; justify-content:space-between; align-items:center; background:var(--surface); color:var(--ink); font-size:10px; font-weight:900; letter-spacing:.5px; }.side strong { font-size:12px; }.side.selected { background:var(--ink); color:var(--inverse); border-color:var(--ink); }.side.selected.yes strong { color:var(--positive); }.side.selected.no strong { color:var(--negative); }
     .amount-row { grid-template-columns:repeat(5,1fr); margin-top:6px; }.amount { border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:7px; height:31px; font-size:9px; font-weight:800; }.amount:hover { color:var(--ink); border-color:var(--ink); }.amount.selected { background:var(--ink); color:var(--inverse); border-color:var(--ink); }.custom { padding:0 5px; }
@@ -126,9 +127,14 @@ function renderError(shadow, marketId, message) {
   shadow.innerHTML = `<style>${cardStyles()}</style><div class="card error"><strong>Market unavailable</strong><p>${escapeHtml(message)}</p><a href="${escapeHtml(configuredOrigin)}/market/${encodeURIComponent(marketId)}" target="_blank" rel="noopener">Open market ↗</a></div>`;
 }
 
-function renderMarket(shadow, market, marketOrigin, source, authState) {
+function renderMarket(shadow, market, marketOrigin, source, authState, positions = []) {
+  let selectedMode = "buy";
   let selectedSide = "YES";
   let selectedAmount = 10;
+  const owned = {
+    YES: Number(positions.find((position) => position.outcome === "YES")?.shares || 0),
+    NO: Number(positions.find((position) => position.outcome === "NO")?.shares || 0),
+  };
   let yesPrice = Math.max(0.01, Math.min(0.99, Number(market.yesPrice)));
   const liquidity = Number(market.liquidityParameter);
   const marketUrl = `${marketOrigin}/market/${encodeURIComponent(market.id)}`;
@@ -138,6 +144,11 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
     const price = selectedSide === "YES" ? yesPrice : 1 - yesPrice;
     if (!liquidity || !price) return 0;
     return liquidity * Math.log((Math.exp(selectedAmount / liquidity) - (1 - price)) / price);
+  };
+  const estimateSaleProceeds = () => {
+    const price = selectedSide === "YES" ? yesPrice : 1 - yesPrice;
+    if (!liquidity || !price || selectedAmount <= 0) return 0;
+    return -liquidity * Math.log((1 - price) + price * Math.exp(-selectedAmount / liquidity));
   };
   const accountLabel = user
     ? `Trading as ${user.xHandle ? `@${user.xHandle.replace(/^@/, "")}` : user.displayName}${authState.balance == null ? "" : ` · ${Number(authState.balance).toFixed(2)} credits`}`
@@ -156,13 +167,14 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
         </div>
       </div>
       <div class="trade">
+        <div class="order-type"><button class="selected" data-mode="buy">Buy</button><button data-mode="sell">Sell</button></div>
         <div class="side-row">
           <button class="side yes selected" data-side="YES"><span>YES</span><strong data-yes-price>${Math.round(yesPrice * 100)}¢</strong></button>
           <button class="side no" data-side="NO"><span>NO</span><strong data-no-price>${Math.round((1 - yesPrice) * 100)}¢</strong></button>
         </div>
         <div class="amount-row">
-          ${[1, 5, 10, 25].map((amount) => `<button class="amount ${amount === 10 ? "selected" : ""}" data-amount="${amount}">$${amount}</button>`).join("")}
-          <button class="amount custom" data-amount="50">$50</button>
+          ${[1, 5, 10, 25].map((amount) => `<button class="amount ${amount === 10 ? "selected" : ""}" data-amount="${amount}"><span data-amount-label>$${amount}</span></button>`).join("")}
+          <button class="amount custom" data-amount="50" data-all="true"><span data-amount-label>$50</span></button>
         </div>
         <div class="summary"><span class="estimate">Est. <strong data-shares>${estimateShares().toFixed(2)} shares</strong></span><div class="actions"><a class="open" href="${escapeHtml(marketUrl)}" target="_blank" rel="noopener">Details ↗</a><button class="preview ${user && isOpen ? "trade" : !user && authState?.configured ? "sign-in" : ""}" ${user && isOpen || !user && authState?.configured ? "" : "disabled"}>${!isOpen ? "Market closed" : user ? `Buy ${selectedSide} · $${selectedAmount}` : authState?.configured ? "Connect xmarket" : "Setup required"}</button></div></div>
         <div class="account-line ${user ? "connected" : ""}"><span data-account-label>${escapeHtml(accountLabel)}</span></div>
@@ -170,21 +182,44 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
     </section>`;
 
   const updateSummary = () => {
-    shadow.querySelector("[data-shares]").textContent = `${estimateShares().toFixed(2)} shares`;
+    shadow.querySelector("[data-shares]").textContent = selectedMode === "buy"
+      ? `${estimateShares().toFixed(2)} shares`
+      : `$${estimateSaleProceeds().toFixed(2)} proceeds · ${owned[selectedSide].toFixed(2)} owned`;
+    shadow.querySelectorAll("[data-amount-label]").forEach((label) => {
+      const amountButton = label.closest("button");
+      label.textContent = selectedMode === "buy" ? `$${amountButton.dataset.amount}` : amountButton.dataset.all ? "All" : amountButton.dataset.amount;
+    });
     const actionButton = shadow.querySelector(".preview.trade");
-    if (actionButton) actionButton.textContent = `Buy ${selectedSide} · $${selectedAmount}`;
+    if (actionButton) {
+      const cannotSell = selectedMode === "sell" && (selectedAmount < 0.01 || selectedAmount > owned[selectedSide]);
+      actionButton.disabled = !isOpen || cannotSell;
+      const sellingAll = selectedMode === "sell" && owned[selectedSide] > 0 && Math.abs(selectedAmount - owned[selectedSide]) < 0.000001;
+      actionButton.textContent = selectedMode === "buy" ? `Buy ${selectedSide} · $${selectedAmount}` : `${sellingAll ? "Sell all" : "Sell"} ${selectedSide} · ${selectedAmount.toFixed(2)}`;
+    }
   };
+
+  shadow.querySelectorAll("[data-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedMode = button.dataset.mode;
+      selectedAmount = selectedMode === "buy" ? 10 : owned[selectedSide];
+      shadow.querySelectorAll("[data-mode]").forEach((item) => item.classList.toggle("selected", item === button));
+      shadow.querySelectorAll("[data-amount]").forEach((item) => item.classList.toggle("selected", selectedMode === "sell" ? Boolean(item.dataset.all) : Number(item.dataset.amount) === selectedAmount));
+      updateSummary();
+    });
+  });
 
   shadow.querySelectorAll("[data-side]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedSide = button.dataset.side;
+      if (selectedMode === "sell") selectedAmount = owned[selectedSide];
       shadow.querySelectorAll("[data-side]").forEach((item) => item.classList.toggle("selected", item === button));
+      shadow.querySelectorAll("[data-amount]").forEach((item) => item.classList.toggle("selected", selectedMode === "sell" ? Boolean(item.dataset.all) : Number(item.dataset.amount) === selectedAmount));
       updateSummary();
     });
   });
   shadow.querySelectorAll("[data-amount]").forEach((button) => {
     button.addEventListener("click", () => {
-      selectedAmount = Number(button.dataset.amount);
+      selectedAmount = selectedMode === "sell" && button.dataset.all ? owned[selectedSide] : Number(button.dataset.amount);
       shadow.querySelectorAll("[data-amount]").forEach((item) => item.classList.toggle("selected", item === button));
       updateSummary();
     });
@@ -196,9 +231,19 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
     authButton.textContent = "Opening xmarket…";
     chrome.runtime.sendMessage({ type: "SIGNAL_CONNECT_WEBSITE" }).then((response) => {
       if (!response?.ok) throw new Error(response?.error || "Sign-in failed.");
-      return chrome.runtime.sendMessage({ type: "SIGNAL_GET_AUTH" });
-    }).then((authResponse) => {
-      renderMarket(shadow, market, marketOrigin, source, authResponse?.ok ? authResponse : { configured: true, user: null });
+      return Promise.all([
+        chrome.runtime.sendMessage({ type: "SIGNAL_GET_AUTH" }),
+        chrome.runtime.sendMessage({ type: "SIGNAL_GET_MARKET_POSITIONS", marketSlug: market.id }),
+      ]);
+    }).then(([authResponse, positionsResponse]) => {
+      renderMarket(
+        shadow,
+        market,
+        marketOrigin,
+        source,
+        authResponse?.ok ? authResponse : { configured: true, user: null },
+        positionsResponse?.ok ? positionsResponse.positions : [],
+      );
     }).catch((error) => {
       authButton.disabled = false;
       authButton.textContent = "Try sign-in again";
@@ -208,32 +253,39 @@ function renderMarket(shadow, market, marketOrigin, source, authState) {
 
   const tradeButton = shadow.querySelector(".preview.trade");
   tradeButton?.addEventListener("click", async () => {
+    const orderMode = selectedMode;
+    const orderSide = selectedSide;
+    const orderAmount = selectedAmount;
     tradeButton.disabled = true;
     tradeButton.textContent = "Executing…";
     try {
       const response = await chrome.runtime.sendMessage({
-        type: "SIGNAL_BUY_POSITION",
+        type: orderMode === "buy" ? "SIGNAL_BUY_POSITION" : "SIGNAL_SELL_POSITION",
         marketSlug: market.id,
-        outcome: selectedSide,
-        amount: selectedAmount,
+        outcome: orderSide,
+        ...(orderMode === "buy" ? { amount: orderAmount } : { shares: orderAmount }),
         clientOrderId: crypto.randomUUID(),
       });
       if (!response?.ok) throw new Error(response?.error || "Trade failed.");
       const result = response.result;
       const newYesPrice = Number(result.market.yes_price);
       yesPrice = Math.max(0.01, Math.min(0.99, newYesPrice));
+      owned[orderSide] = Number(result.position_shares || 0);
+      if (orderMode === "sell" && owned[orderSide] === 0 && selectedSide === orderSide) selectedAmount = 0;
       shadow.querySelector("[data-chance]").textContent = `${Math.round(newYesPrice * 100)}%`;
       shadow.querySelector("[data-probability-bar]").style.width = `${newYesPrice * 100}%`;
       shadow.querySelector("[data-yes-price]").textContent = `${Math.round(newYesPrice * 100)}¢`;
       shadow.querySelector("[data-no-price]").textContent = `${Math.round((1 - newYesPrice) * 100)}¢`;
       shadow.querySelector("[data-volume]").textContent = `$${compactNumber.format(Number(result.market.volume))} volume`;
-      shadow.querySelector("[data-account-label]").textContent = `Bought ${Number(result.shares_bought).toFixed(2)} ${selectedSide} shares · ${Number(result.balance).toFixed(2)} credits left`;
+      shadow.querySelector("[data-account-label]").textContent = orderMode === "buy"
+        ? `Bought ${Number(result.shares_bought).toFixed(2)} ${orderSide} shares · ${Number(result.balance).toFixed(2)} credits left`
+        : `Sold ${Number(result.shares_sold).toFixed(2)} ${orderSide} shares for ${Number(result.proceeds).toFixed(2)} credits`;
       updateSummary();
     } catch (error) {
       tradeButton.textContent = "Try order again";
       shadow.querySelector("[data-account-label]").textContent = error.message;
     } finally {
-      tradeButton.disabled = false;
+      tradeButton.disabled = selectedMode === "sell" && (selectedAmount < 0.01 || selectedAmount > owned[selectedSide]);
     }
   });
 }
@@ -254,9 +306,10 @@ async function injectCard(anchor, marketId) {
   else article.append(host);
 
   try {
-    const [response, authResponse] = await Promise.all([
+    const [response, authResponse, positionsResponse] = await Promise.all([
       chrome.runtime.sendMessage({ type: "SIGNAL_GET_MARKET", marketId }),
       chrome.runtime.sendMessage({ type: "SIGNAL_GET_AUTH" }),
+      chrome.runtime.sendMessage({ type: "SIGNAL_GET_MARKET_POSITIONS", marketSlug: marketId }),
     ]);
     if (!response?.ok) throw new Error(response?.error || "Could not load this market.");
     renderMarket(
@@ -265,6 +318,7 @@ async function injectCard(anchor, marketId) {
       response.marketOrigin,
       response.source,
       authResponse?.ok ? authResponse : { configured: false, user: null },
+      positionsResponse?.ok ? positionsResponse.positions : [],
     );
   } catch (error) {
     renderError(shadow, marketId, error.message);

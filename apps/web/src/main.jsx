@@ -12,7 +12,6 @@ import {
   LogOut,
   Moon,
   Search,
-  Sparkles,
   Sun,
   Wallet,
   X,
@@ -21,11 +20,14 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AuthModal } from "./auth/AuthModal";
 import {
   buyPosition,
+  estimateLmsrSaleProceeds,
   estimateLmsrShares,
   getMarket,
+  getMarketPositions,
   getPositions,
   getProfile,
   listMarkets,
+  sellPosition,
   subscribeToMarket,
 } from "./lib/marketApi";
 import { supabase } from "./lib/supabase";
@@ -89,7 +91,6 @@ function Header({ page, navigate, openAuth, balance, theme, toggleTheme }) {
           <button className="icon-button theme-toggle" onClick={toggleTheme} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
             {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
           </button>
-          <button className="icon-button search-button" aria-label="Search markets"><Search size={19} /></button>
           {session ? (
             <>
               <button className="balance-pill" onClick={() => navigate("/portfolio")}>
@@ -163,7 +164,6 @@ function Home({ markets, loading, error, openMarket, retry }) {
   return (
     <main>
       <section className="hero">
-        <div className="eyebrow"><Sparkles size={14} /> Markets born on X</div>
         <h1>Put your conviction<br />where the conversation is.</h1>
         <p>Trade on the questions shaping your timeline. Clear outcomes, real-time odds, and a point of view that counts.</p>
         <div className="hero-search">
@@ -219,17 +219,52 @@ function Home({ markets, loading, error, openMarket, retry }) {
 }
 
 function TradePanel({ market, balance, openAuth, onTradeComplete }) {
+  const [mode, setMode] = useState("buy");
   const [side, setSide] = useState("YES");
   const [amount, setAmount] = useState(10);
+  const [positions, setPositions] = useState([]);
   const [tradeLoading, setTradeLoading] = useState(false);
   const [tradeError, setTradeError] = useState("");
   const [tradeResult, setTradeResult] = useState("");
   const { session } = useAuth();
   const price = side === "YES" ? market.yesPrice : 1 - market.yesPrice;
   const numericAmount = Number(amount);
-  const shares = estimateLmsrShares(market, side, numericAmount);
-  const executionPrice = shares > 0 ? numericAmount / shares : 0;
+  const ownedShares = Number(positions.find((position) => position.outcome === side)?.shares || 0);
+  const estimatedShares = mode === "buy" ? estimateLmsrShares(market, side, numericAmount) : numericAmount;
+  const estimatedProceeds = mode === "sell" ? estimateLmsrSaleProceeds(market, side, numericAmount) : 0;
+  const executionPrice = mode === "buy"
+    ? estimatedShares > 0 ? numericAmount / estimatedShares : 0
+    : numericAmount > 0 ? estimatedProceeds / numericAmount : 0;
   const isOpen = market.status === "open" && new Date(market.closesAtIso) > new Date();
+
+  useEffect(() => {
+    if (!session) {
+      setPositions([]);
+      return undefined;
+    }
+    let active = true;
+    getMarketPositions(market.dbId)
+      .then((nextPositions) => { if (active) setPositions(nextPositions); })
+      .catch((error) => console.error("Could not load market positions", error));
+    return () => { active = false; };
+  }, [market.dbId, session]);
+
+  const chooseMode = (nextMode) => {
+    setMode(nextMode);
+    setTradeError("");
+    setTradeResult("");
+    if (nextMode === "buy") setAmount(10);
+    else setAmount(ownedShares || 0);
+  };
+
+  const chooseSide = (nextSide) => {
+    setSide(nextSide);
+    setTradeError("");
+    if (mode === "sell") {
+      const nextOwned = Number(positions.find((position) => position.outcome === nextSide)?.shares || 0);
+      setAmount(nextOwned || 0);
+    }
+  };
 
   const executeTrade = async () => {
     if (!session) {
@@ -241,12 +276,17 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
       setTradeError("This market is closed for trading.");
       return;
     }
-    if (!Number.isFinite(numericAmount) || numericAmount < 1 || numericAmount > 10000) {
-      setTradeError("Choose an amount between 1 and 10,000 credits.");
+    const minimum = mode === "buy" ? 1 : 0.01;
+    if (!Number.isFinite(numericAmount) || numericAmount < minimum || numericAmount > (mode === "buy" ? 10000 : 1000000)) {
+      setTradeError(mode === "buy" ? "Choose an amount between 1 and 10,000 credits." : "Choose at least 0.01 shares to sell.");
       return;
     }
-    if (balance != null && numericAmount > balance) {
+    if (mode === "buy" && balance != null && numericAmount > balance) {
       setTradeError("Your credit balance is too low for this order.");
+      return;
+    }
+    if (mode === "sell" && numericAmount > ownedShares + 0.000001) {
+      setTradeError(`You only own ${ownedShares.toFixed(2)} ${side} shares.`);
       return;
     }
 
@@ -254,13 +294,17 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
     setTradeError("");
     setTradeResult("");
     try {
-      const result = await buyPosition({
-        marketSlug: market.id,
-        outcome: side,
-        amount: numericAmount,
-        clientOrderId: crypto.randomUUID(),
+      const result = mode === "buy"
+        ? await buyPosition({ marketSlug: market.id, outcome: side, amount: numericAmount, clientOrderId: crypto.randomUUID() })
+        : await sellPosition({ marketSlug: market.id, outcome: side, shares: numericAmount, clientOrderId: crypto.randomUUID() });
+      setPositions((current) => {
+        const remaining = Number(result.position_shares || 0);
+        const withoutSide = current.filter((position) => position.outcome !== side);
+        return remaining > 0 ? [...withoutSide, { outcome: side, shares: remaining }] : withoutSide;
       });
-      setTradeResult(`Bought ${Number(result.shares_bought).toFixed(2)} ${side} shares at an average of ${Math.round(Number(result.execution_price) * 100)}¢.`);
+      setTradeResult(mode === "buy"
+        ? `Bought ${Number(result.shares_bought).toFixed(2)} ${side} shares at an average of ${Math.round(Number(result.execution_price) * 100)}¢.`
+        : `Sold ${Number(result.shares_sold).toFixed(2)} ${side} shares for ${money(Number(result.proceeds))}.`);
       await onTradeComplete?.(result);
     } catch (error) {
       console.error("Trade failed", error);
@@ -273,23 +317,33 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
   return (
     <aside className="trade-panel">
       <div className="trade-heading"><span>Build a position</span><small>Credit balance</small></div>
-      <div className="side-toggle">
-        <button className={side === "YES" ? "selected yes" : ""} onClick={() => setSide("YES")}><span>YES</span><strong>{Math.round(market.yesPrice * 100)}¢</strong></button>
-        <button className={side === "NO" ? "selected no" : ""} onClick={() => setSide("NO")}><span>NO</span><strong>{Math.round((1 - market.yesPrice) * 100)}¢</strong></button>
+      <div className="trade-mode" aria-label="Order type">
+        <button className={mode === "buy" ? "active" : ""} onClick={() => chooseMode("buy")}>Buy</button>
+        <button className={mode === "sell" ? "active" : ""} onClick={() => chooseMode("sell")}>Sell</button>
       </div>
-      <label className="amount-label">Amount <span>Balance {session ? balance == null ? "—" : money(balance) : "Sign in"}</span></label>
-      <div className="amount-input"><span>$</span><input type="number" min="1" value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
+      <div className="side-toggle">
+        <button className={side === "YES" ? "selected yes" : ""} onClick={() => chooseSide("YES")}><span>YES</span><strong>{Math.round(market.yesPrice * 100)}¢</strong></button>
+        <button className={side === "NO" ? "selected no" : ""} onClick={() => chooseSide("NO")}><span>NO</span><strong>{Math.round((1 - market.yesPrice) * 100)}¢</strong></button>
+      </div>
+      <label className="amount-label">{mode === "buy" ? "Amount" : "Shares to sell"} <span>{mode === "buy" ? `Balance ${session ? balance == null ? "—" : money(balance) : "Sign in"}` : `Owned ${ownedShares.toFixed(2)}`}</span></label>
+      <div className="amount-input">{mode === "buy" && <span>$</span>}<input type="number" min={mode === "buy" ? "1" : "0.01"} step={mode === "buy" ? "1" : "0.01"} value={amount} onChange={(event) => setAmount(event.target.value)} /></div>
       <div className="quick-amounts">
-        {[1, 5, 10, 25].map((value) => <button key={value} className={Number(amount) === value ? "active" : ""} onClick={() => setAmount(value)}>${value}</button>)}
+        {(mode === "buy" ? [1, 5, 10, 25] : [1, 5, 10]).map((value) => <button key={value} className={Number(amount) === value ? "active" : ""} onClick={() => setAmount(value)} disabled={mode === "sell" && value > ownedShares}>{mode === "buy" ? `$${value}` : value}</button>)}
+        {mode === "sell" && <button className={numericAmount === ownedShares && ownedShares > 0 ? "active" : ""} onClick={() => setAmount(ownedShares)} disabled={!ownedShares}>All</button>}
       </div>
       <div className="order-summary">
         <div><span>Current price</span><strong>{Math.round(price * 100)}¢</strong></div>
         <div><span>Est. average price</span><strong>{executionPrice ? `${Math.round(executionPrice * 100)}¢` : "—"}</strong></div>
-        <div><span>Estimated shares</span><strong>{shares.toFixed(2)}</strong></div>
-        <div className="potential"><span>Potential payout</span><strong>{money(shares)}</strong></div>
+        {mode === "buy" ? <>
+          <div><span>Estimated shares</span><strong>{estimatedShares.toFixed(2)}</strong></div>
+          <div className="potential"><span>Potential payout</span><strong>{money(estimatedShares)}</strong></div>
+        </> : <>
+          <div><span>Shares remaining</span><strong>{Math.max(0, ownedShares - (numericAmount || 0)).toFixed(2)}</strong></div>
+          <div className="potential"><span>Estimated proceeds</span><strong>{money(estimatedProceeds)}</strong></div>
+        </>}
       </div>
-      <button className="buy-button" onClick={executeTrade} disabled={tradeLoading || !isOpen}>
-        <span>{tradeLoading ? "Executing order…" : !isOpen ? "Market closed" : session ? `Buy ${side} for ${money(numericAmount || 0)}` : "Sign in to buy"}</span>
+      <button className="buy-button" onClick={executeTrade} disabled={tradeLoading || !isOpen || (mode === "sell" && Boolean(session) && (ownedShares < 0.01 || numericAmount > ownedShares))}>
+        <span>{tradeLoading ? "Executing order…" : !isOpen ? "Market closed" : !session ? "Sign in to trade" : mode === "buy" ? `Buy ${side} for ${money(numericAmount || 0)}` : numericAmount === ownedShares && ownedShares > 0 ? `Sell all ${side} shares` : `Sell ${(numericAmount || 0).toFixed(2)} ${side} shares`}</span>
       </button>
       {tradeError && <p className="trade-error" role="alert">{tradeError}</p>}
       {tradeResult && <p className="trade-success" role="status"><Check size={14} /> {tradeResult}</p>}
@@ -371,7 +425,7 @@ function Portfolio({ openMarket, openAuth, navigate }) {
 
   return (
     <main className="portfolio-page page-shell">
-      <div className="portfolio-head"><span className="section-kicker"><Wallet size={15} /> Your account</span><h1>Portfolio</h1><p>Track your balance and open market positions.</p></div>
+      <div className="portfolio-head"><h1>Portfolio</h1><p>Track your balance and open market positions.</p></div>
       <button className="add-credits-button" onClick={() => navigate("/credits")}>Add credits <ArrowRight size={16} /></button>
       <div className="balance-grid">
         <div className="balance-card primary"><span>Available balance</span><strong>{profile ? money(Number(profile.demo_balance)) : "—"}</strong><small>Credits</small></div>
