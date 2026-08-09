@@ -1,7 +1,17 @@
 import { createMarket, type MarketView } from "./market";
 import type { SupabaseEnv } from "./supabase";
+import { xCreateTweet, type XCreds } from "./x";
 
 const CRON_ID = "modern_market_creator";
+const WEB_BASE_URL = "https://xmarket.aidenhuang.com";
+
+interface MarketCreatorEnv extends SupabaseEnv {
+  DB: D1Database;
+  X_API_KEY: string;
+  X_API_SECRET: string;
+  X_ACCESS_TOKEN: string;
+  X_ACCESS_TOKEN_SECRET: string;
+}
 
 interface MarketTemplate {
   question: string;
@@ -95,9 +105,26 @@ async function setNextRun(db: D1Database, next: number): Promise<void> {
     .run();
 }
 
+function getCreds(env: MarketCreatorEnv): XCreds | null {
+  if (
+    !env.X_API_KEY ||
+    !env.X_API_SECRET ||
+    !env.X_ACCESS_TOKEN ||
+    !env.X_ACCESS_TOKEN_SECRET
+  ) {
+    return null;
+  }
+  return {
+    apiKey: env.X_API_KEY,
+    apiSecret: env.X_API_SECRET,
+    accessToken: env.X_ACCESS_TOKEN,
+    accessTokenSecret: env.X_ACCESS_TOKEN_SECRET,
+  };
+}
+
 export async function autoCreateModernMarket(
-  env: SupabaseEnv,
-): Promise<{ ok: boolean; market?: MarketView; error?: string }> {
+  env: MarketCreatorEnv,
+): Promise<{ ok: boolean; market?: MarketView; error?: string; tweet_id?: string; tweet_error?: string }> {
   const db = (env as { DB?: D1Database }).DB;
   if (!db) return { ok: false, error: "D1 DB binding missing" };
 
@@ -133,7 +160,16 @@ export async function autoCreateModernMarket(
   await setNextRun(db, next);
 
   if (created) {
-    return { ok: true, market: created };
+    const tweet = `${created.question}\n\n${WEB_BASE_URL}/market/${created.slug}`;
+    const creds = getCreds(env);
+    let tweet_id: string | undefined;
+    let tweet_error: string | undefined;
+    if (creds) {
+      const posted = await xCreateTweet(creds, tweet);
+      if (posted.ok) tweet_id = posted.id;
+      else tweet_error = posted.error;
+    }
+    return { ok: true, market: created, tweet_id, tweet_error };
   }
   return { ok: false, error: lastError || "all templates already exist" };
 }
