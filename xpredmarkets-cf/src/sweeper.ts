@@ -18,6 +18,8 @@ import { attachRelatedTweets } from "./market_tweets";
 type SweeperEnv = MentionSupabaseEnv & {
   DB: D1Database;
   X_BEARER_TOKEN: string;
+  X_TRENDS_WOEID?: string;
+  SWEEPER_MAX_CREATE?: string;
   X_API_KEY?: string;
   X_API_SECRET?: string;
   X_ACCESS_TOKEN?: string;
