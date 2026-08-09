@@ -136,15 +136,22 @@ async def _run_once() -> None:
         print("Set X_BEARER_TOKEN (in .env or ~/.env) to pull live X trends.")
         sys.exit(1)
 
-    max_topics = _env_int("MAX_TOPICS", 1)
-    max_x_requests = _env_int("MAX_X_REQUESTS", 5)
-    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 10)
+    max_topics = _env_int("MAX_TOPICS", 2)
+    max_x_requests = _env_int("MAX_X_REQUESTS", 10)
+    max_posts = _env_int("MAX_POSTS_PER_TOPIC", 50)
     min_volume = _env_int("MIN_VOLUME", 25)
     max_context_grok_calls = _env_int("MAX_CONTEXT_GROK_CALLS", 2)
     woeid = _env_int("X_TRENDS_WOEID", 1)
     debug = _env_int("SWEEPER_DEBUG", 0)
     create_threshold = _env_float("CREATE_THRESHOLD", 0.62)
     interval = _env_int("SWEEP_INTERVAL_SECONDS", 0)
+    discovery_mode = os.environ.get("DISCOVERY_MODE", "trends").strip().lower()
+    default_queries = (
+        "from:Reuters OR from:AP OR from:politico OR from:axios OR from:CNBC "
+        "lang:en -is:retweet has:links;"
+        "from:ESPN OR from:SportsCenter OR from:espn lang:en -is:retweet has:links"
+    )
+    discovery_queries = [q.strip() for q in os.environ.get("DISCOVERY_QUERIES", default_queries).split(";") if q.strip()]
 
     if debug:
         logging.basicConfig(level=logging.DEBUG, format="%(levelname)s: %(message)s")
@@ -189,12 +196,17 @@ async def _run_once() -> None:
 
     budget = RequestBudget(max_requests=cfg.max_x_requests_per_sweep)
     client = XIngestionClient(budget=budget)
-    discovery = CompositeDiscovery(
-        [
-            XTrendDiscovery(client, woeid=woeid, limit=cfg.max_topics_per_sweep),
-            ConfiguredDiscovery(["fed rate decision -is:retweet lang:en"]),
-        ]
-    )
+    if discovery_mode == "configured":
+        print(f"INFO: configured discovery with {len(discovery_queries)} source queries")
+        discovery = CompositeDiscovery([ConfiguredDiscovery(discovery_queries)])
+    else:
+        print(f"INFO: X trends discovery (woeid={woeid})")
+        discovery = CompositeDiscovery(
+            [
+                XTrendDiscovery(client, woeid=woeid, limit=cfg.max_topics_per_sweep),
+                ConfiguredDiscovery(discovery_queries),
+            ]
+        )
     sweeper = BackgroundSweeper(
         discovery=discovery,
         ingestion=XSeedIngestion(client, cfg),
