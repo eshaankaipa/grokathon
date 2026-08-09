@@ -207,7 +207,7 @@ function Home({ markets, loading, error, openMarket, retry }) {
           <span className="section-kicker">From takes to stakes</span>
           <h2>Every strong opinion deserves a market.</h2>
         </div>
-        <div className="x-prompt"><span className="x-glyph">𝕏</span><p><b>@xmarket /market</b><br />Will this actually happen?</p></div>
+        <div className="x-prompt"><span className="x-glyph">𝕏</span><p><b>@XPredMarkets</b><br />Will this actually happen?</p></div>
       </section>
     </main>
   );
@@ -285,11 +285,9 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
       </div>
       <button className="buy-button" onClick={executeTrade} disabled={tradeLoading || !isOpen}>
         <span>{tradeLoading ? "Executing order…" : !isOpen ? "Market closed" : session ? `Buy ${side} for ${money(numericAmount || 0)}` : "Sign in to buy"}</span>
-        <small>LMSR market · Instant execution</small>
       </button>
       {tradeError && <p className="trade-error" role="alert">{tradeError}</p>}
       {tradeResult && <p className="trade-success" role="status"><Check size={14} /> {tradeResult}</p>}
-      <p className="trade-note"><Check size={14} /> Orders execute atomically. Winning shares pay 1 credit.</p>
     </aside>
   );
 }
@@ -316,14 +314,6 @@ function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) 
             <div><span>Traders</span><strong>{compact(market.traders)}</strong></div>
             <div><span>Closes</span><strong>{market.closesAt}</strong></div>
           </div>
-          <section className="rules-card">
-            <span className="section-kicker">The fine print, made clear</span>
-            <h2>How this market resolves</h2>
-            <p>{market.resolutionCriteria || market.description}</p>
-            {(market.sourceTweetUrl || market.sourceTweetId || market.creator) && (
-              <div className="source-context"><span className="x-glyph">𝕏</span><div><strong>Source conversation</strong>{market.sourceTweetUrl && <p><a href={market.sourceTweetUrl} target="_blank" rel="noreferrer">View the source post on X ↗</a></p>}{market.creator && <small>Created by {market.creator}</small>}</div></div>
-            )}
-          </section>
         </section>
         <TradePanel market={market} balance={balance} openAuth={openAuth} onTradeComplete={onTradeComplete} />
       </div>
@@ -435,7 +425,6 @@ function CreditStore({ openAuth, navigate }) {
   return (
     <main className="credits-page page-shell">
       <button className="back-link" onClick={() => navigate("/portfolio")}><ArrowLeft size={16} /> Portfolio</button>
-      <span className="section-kicker"><Wallet size={15} /> Credit wallet</span>
       <h1>Top up your trading balance.</h1>
       <p className="credits-lede">Choose a credit pack and continue to secure checkout.</p>
       <div className="credit-packs">
