@@ -32,6 +32,8 @@ export async function processMentionToSupabase(
     botUsername?: string;
     botUserId?: string;
     liquidity?: number;
+    in_reply_to_user_id?: string | null;
+    conversation_id?: string | null;
   },
 ): Promise<Result<MentionMarketResult>> {
   return processMentionWithGate(env, {
@@ -42,5 +44,7 @@ export async function processMentionToSupabase(
     botUsername: input.botUsername ?? env.BOT_USERNAME,
     botUserId: input.botUserId,
     liquidity: input.liquidity,
+    in_reply_to_user_id: input.in_reply_to_user_id,
+    conversation_id: input.conversation_id,
   });
 }

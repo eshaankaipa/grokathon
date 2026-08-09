@@ -9,6 +9,7 @@
 
 import {
   cleanMentionText,
+  evaluateMentionIntent,
   filterBinarySuggestions,
   heuristicSuggestions,
   looksBinaryQuestion,
@@ -57,6 +58,11 @@ export interface MentionMarketResult {
   suggestions?: string[];
   /** Gate decision detail: reject vs clarify (both map to action=skipped) */
   gate?: "reject" | "clarify";
+  /**
+   * When true, do not post any X reply (casual thread noise, no intent).
+   * Prevents the bot from replying under unrelated comments.
+   */
+  silent?: boolean;
 }
 
 export function marketUrls(market: MarketView): { url: string; og_image: string } {
@@ -105,7 +111,14 @@ export type ParsedMention =
 
 export function parseMentionText(
   text: string,
-  opts?: { botUsername?: string; botUserId?: string; authorId?: string },
+  opts?: {
+    botUsername?: string;
+    botUserId?: string;
+    authorId?: string;
+    inReplyToUserId?: string | null;
+    conversationId?: string | null;
+    tweetId?: string | null;
+  },
 ): ParsedMention {
   const botUsername = opts?.botUsername ?? "XPredMarkets";
   const raw = (text ?? "").trim();
@@ -114,6 +127,22 @@ export function parseMentionText(
   // Ignore bot's own posts that self-@mention
   if (opts?.botUserId && opts?.authorId && opts.botUserId === opts.authorId) {
     return { kind: "skip", reason: "self-mention from bot" };
+  }
+
+  // Casual thread replies ("oh nice project") — silent skip, no market, no reply
+  const intent = evaluateMentionIntent(raw, {
+    botUsername,
+    botUserId: opts?.botUserId,
+    inReplyToUserId: opts?.inReplyToUserId,
+    conversationId: opts?.conversationId,
+    tweetId: opts?.tweetId,
+  });
+  if (!intent.process) {
+    return {
+      kind: "skip",
+      reason: intent.reason,
+      // mark via empty suggestions + special reason; silent handled by callers
+    };
   }
 
   const urlMatch = raw.match(MARKET_URL_RE);
@@ -280,6 +309,21 @@ function pack(
   };
 }
 
+/** Reasons that must never produce an X reply (no suggestion spam). */
+export function isSilentSkipReason(reason?: string): boolean {
+  if (!reason) return false;
+  const r = reason.toLowerCase();
+  return (
+    r.includes("conversational") ||
+    r.includes("without market intent") ||
+    r.includes("no market intent") ||
+    r === "empty mention" ||
+    r === "self-mention from bot" ||
+    r === "question has no letters/numbers" ||
+    r.startsWith("no market question found")
+  );
+}
+
 /**
  * Core wrapper: from mention text (+ optional tweet id), create or redirect.
  */
@@ -294,6 +338,8 @@ export async function processMentionToMarket(
     botUserId?: string;
     liquidity?: number;
     force_create?: boolean;
+    in_reply_to_user_id?: string | null;
+    conversation_id?: string | null;
   },
 ): Promise<Result<MentionMarketResult>> {
   const tweetId = input.tweet_id?.trim();
@@ -321,17 +367,22 @@ export async function processMentionToMarket(
     botUsername: input.botUsername,
     botUserId: input.botUserId,
     authorId: input.author_id ?? undefined,
+    inReplyToUserId: input.in_reply_to_user_id,
+    conversationId: input.conversation_id,
+    tweetId,
   });
 
   if (parsed.kind === "skip") {
+    const silent = isSilentSkipReason(parsed.reason);
     return {
       ok: true,
       action: "skipped",
       reason: parsed.reason,
       tweet_id: tweetId,
       author_username: input.author_username,
-      suggestions: parsed.suggestions,
+      suggestions: silent ? undefined : parsed.suggestions,
       gate: parsed.gate,
+      silent,
     };
   }
 
@@ -462,6 +513,8 @@ export async function processMentionsBatch(
           botUsername: opts.botUsername,
           botUserId: opts.botUserId,
           liquidity: opts.liquidity,
+          in_reply_to_user_id: m.in_reply_to_user_id,
+          conversation_id: m.conversation_id,
         })
       : await processMentionToMarket(env, {
           text: m.text,
@@ -471,6 +524,8 @@ export async function processMentionsBatch(
           botUsername: opts.botUsername,
           botUserId: opts.botUserId,
           liquidity: opts.liquidity,
+          in_reply_to_user_id: m.in_reply_to_user_id,
+          conversation_id: m.conversation_id,
         });
     if (!r.ok) {
       results.push({
@@ -508,6 +563,8 @@ export async function processMentionWithGate(
     botUserId?: string;
     liquidity?: number;
     force_create?: boolean;
+    in_reply_to_user_id?: string | null;
+    conversation_id?: string | null;
   },
 ): Promise<Result<MentionMarketResult>> {
   const tweetId = input.tweet_id?.trim();
@@ -520,6 +577,26 @@ export async function processMentionWithGate(
       reason: "self-mention from bot",
       tweet_id: tweetId,
       author_username: input.author_username,
+      silent: true,
+    };
+  }
+
+  // Early intent filter — before Grok / create (stops thread drive-by comments)
+  const intent = evaluateMentionIntent(input.text, {
+    botUsername,
+    botUserId: input.botUserId,
+    inReplyToUserId: input.in_reply_to_user_id,
+    conversationId: input.conversation_id,
+    tweetId,
+  });
+  if (!intent.process) {
+    return {
+      ok: true,
+      action: "skipped",
+      reason: intent.reason,
+      tweet_id: tweetId,
+      author_username: input.author_username,
+      silent: true,
     };
   }
 
@@ -547,6 +624,9 @@ export async function processMentionWithGate(
     botUsername,
     botUserId: input.botUserId,
     authorId: input.author_id ?? undefined,
+    inReplyToUserId: input.in_reply_to_user_id,
+    conversationId: input.conversation_id,
+    tweetId,
   });
   if (parsed.kind === "redirect") {
     const m = await getMarket(env, parsed.marketId);
@@ -573,20 +653,28 @@ export async function processMentionWithGate(
       }),
     };
   }
-  if (
-    parsed.kind === "skip" &&
-    (parsed.reason === "empty mention" ||
+  if (parsed.kind === "skip") {
+    const silent = isSilentSkipReason(parsed.reason);
+    // Silent / trivial skips: do not call Grok
+    if (
+      silent ||
+      parsed.reason === "empty mention" ||
       parsed.reason === "self-mention from bot" ||
       parsed.reason === "question has no letters/numbers" ||
-      parsed.reason.startsWith("no market question found"))
-  ) {
-    return {
-      ok: true,
-      action: "skipped",
-      reason: parsed.reason,
-      tweet_id: tweetId,
-      author_username: input.author_username,
-    };
+      parsed.reason.startsWith("no market question found")
+    ) {
+      return {
+        ok: true,
+        action: "skipped",
+        reason: parsed.reason,
+        tweet_id: tweetId,
+        author_username: input.author_username,
+        suggestions: silent ? undefined : parsed.suggestions,
+        gate: parsed.gate,
+        silent,
+      };
+    }
+    // Open-ended etc. fall through to Grok for better suggestions below
   }
 
   const apiKey = env.XAI_API_KEY?.trim();
@@ -695,10 +783,15 @@ export async function processMentionWithGate(
 
 /** Build a reply tweet body for the bot (optional announce). */
 export function formatMarketReply(result: MentionMarketResult): string | null {
+  // Never reply under casual thread comments
+  if (result.silent) return null;
+
   if (result.action === "created" && result.market_id && result.url) {
     return `Market open: ${result.question}\n\nTrade: ${result.url}`;
   }
   if (result.action === "redirected" && result.url) {
+    // Don't re-announce already-processed tweets as new replies under random comments
+    if (result.already_processed) return null;
     return `That market already exists — jump in:\n${result.url}`;
   }
   if (result.action === "skipped") {
@@ -709,6 +802,7 @@ export function formatMarketReply(result: MentionMarketResult): string | null {
 
 /** Helpful reply when we refuse to create — include yes/no suggestions. */
 export function formatSkipReply(result: MentionMarketResult): string | null {
+  if (result.silent) return null;
   const suggestions = (result.suggestions ?? []).filter(Boolean).slice(0, 2);
   if (suggestions.length === 0 && !result.reason) return null;
 
