@@ -35,6 +35,7 @@ import {
 } from "./x";
 import { resolveMarketWithGrok } from "./xai";
 import { announceResolution, autoResolveMarket, resolveDueMarkets } from "./resolver";
+import { autoCreateModernMarket } from "./modern_markets";
 
 export interface Env {
   DB: D1Database;
@@ -998,11 +999,16 @@ export default {
   },
 
   async scheduled(
-    _controller: ScheduledController,
+    controller: ScheduledController,
     env: Env,
     ctx: ExecutionContext,
   ): Promise<void> {
-    ctx.waitUntil(resolveDueMarkets(env));
+    const cron = controller.cron;
+    if (cron === "*/1 * * * *") {
+      ctx.waitUntil(autoCreateModernMarket(env));
+    } else {
+      ctx.waitUntil(resolveDueMarkets(env));
+    }
   },
 };
 
