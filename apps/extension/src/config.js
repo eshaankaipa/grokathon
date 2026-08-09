@@ -1,6 +1,7 @@
-export const DEFAULT_MARKET_ORIGIN = "https://xpred.aidenhuang.com";
+export const DEFAULT_MARKET_ORIGIN = "https://xmarket.aidenhuang.com";
 export const LEGACY_MARKET_ORIGINS = new Set([
   "http://localhost:5175",
+  "https://xpred.aidenhuang.com",
 ]);
 
 export function normalizeMarketOrigin(origin) {
