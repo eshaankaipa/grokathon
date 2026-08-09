@@ -49,9 +49,26 @@ function stripMentions(text: string, botUsername = "XPredMarkets"): string {
 
 function extractJson(text: string): string {
   const t = text.trim();
+  if (t.startsWith("{")) {
+    try {
+      JSON.parse(t);
+      return t;
+    } catch { /* fall through to first-object extraction */ }
+  }
   if (t.startsWith("```")) {
     const m = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     return m?.[1]?.trim() ?? t.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+  }
+  const start = t.indexOf("{");
+  if (start === -1) return t;
+  for (let i = start + 1; i < t.length; i++) {
+    if (t[i] === "}") {
+      const candidate = t.slice(start, i + 1);
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch { /* continue to next } */ }
+    }
   }
   return t;
 }
@@ -169,6 +186,117 @@ Tweet to parse: ${cleaned}`;
     return {
       ok: false,
       error: `grok parse failed: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+}
+
+export type ResolutionProposal = {
+  outcome: "yes" | "no" | "void";
+  reason: string;
+  raw: string;
+};
+
+export type GrokResolutionResult =
+  | { ok: true; data: ResolutionProposal }
+  | { ok: false; error: string };
+
+export async function resolveMarketWithGrok(
+  env: { XAI_API_KEY: string },
+  market: {
+    question: string;
+    description: string | null;
+    rules: string | null;
+    resolve_by: number | null;
+  },
+  opts?: { model?: string },
+): Promise<GrokResolutionResult> {
+  if (!env.XAI_API_KEY) return { ok: false, error: "XAI_API_KEY not configured" };
+
+  const now = new Date().toISOString();
+  const closeAt = market.resolve_by
+    ? new Date(market.resolve_by * 1000).toISOString()
+    : "not specified";
+
+  const prompt = `You are a JSON-only prediction market judge. Use web search to determine the resolution.
+
+Market question: ${market.question}
+Description: ${market.description || ""}
+Resolution criteria: ${market.rules || "Resolves based on publicly available information."}
+Current UTC time: ${now}
+Market closes / resolve_by: ${closeAt}
+
+Search the web for authoritative, current, publicly available information. Then return ONLY a compact JSON object with this exact shape and no other text before or after:
+
+{"outcome": "yes" | "no" | "void", "reason": "1 sentence explaining the factual basis"}
+
+- "yes" if the event clearly happened / the condition is true.
+- "no" if it clearly did not.
+- "void" only if the question is unresolvable, ambiguous, or there is no publicly available answer.`;
+
+  try {
+    const res = await fetch(`${XAI_BASE_URL}/responses`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.XAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: opts?.model ?? "grok-4.5",
+        input: [{ role: "user", content: prompt }],
+        tools: [{ type: "web_search" }],
+        temperature: 0.2,
+        text: { format: { type: "json_object" } },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return {
+        ok: false,
+        error: `xAI API error ${res.status}: ${body.slice(0, 200)}`,
+      };
+    }
+
+    const json = (await res.json()) as {
+      output?: Array<{
+        type: string;
+        content?: Array<{ type: string; text?: string }>;
+        text?: string;
+      }>;
+    };
+
+    const message = json.output?.find((o) => o.type === "message");
+    const text = message?.content?.[0]?.text ?? message?.text ?? "";
+    if (!text) return { ok: false, error: "xAI returned empty response" };
+
+    const raw = extractJson(text);
+    let parsed: Partial<ResolutionProposal>;
+    try {
+      parsed = JSON.parse(raw) as Partial<ResolutionProposal>;
+    } catch (e) {
+      return {
+        ok: false,
+        error: `xAI did not return valid JSON: ${e instanceof Error ? e.message : String(e)}`,
+      };
+    }
+
+    const outcome = (parsed.outcome ?? "").toLowerCase().trim();
+    if (outcome !== "yes" && outcome !== "no" && outcome !== "void") {
+      return { ok: false, error: `invalid outcome: ${outcome}` };
+    }
+
+    return {
+      ok: true,
+      data: {
+        outcome: outcome as ResolutionProposal["outcome"],
+        reason: (parsed.reason ?? "").trim() || "no reason given",
+        raw: text,
+      },
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: `resolve with grok failed: ${e instanceof Error ? e.message : String(e)}`,
     };
   }
 }

@@ -36,6 +36,8 @@ export interface Market {
   created_at: number;
   resolved_at: number | null;
   rules: string | null;
+  source_tweet_id: string | null;
+  source_tweet_url: string | null;
 }
 
 export interface MarketView extends Market {
@@ -248,6 +250,8 @@ function mapMarket(row: Record<string, unknown>): Market {
     created_at: Math.floor(new Date(String(row.created_at || 0)).getTime() / 1000),
     resolved_at: row.resolved_at ? Math.floor(new Date(String(row.resolved_at)).getTime() / 1000) : null,
     rules: row.resolution_criteria == null || String(row.resolution_criteria) === "" ? null : String(row.resolution_criteria),
+    source_tweet_id: row.source_tweet_id ? String(row.source_tweet_id) : null,
+    source_tweet_url: row.source_tweet_url ? String(row.source_tweet_url) : null,
   };
 }
 
@@ -422,10 +426,58 @@ export async function resolveMarket(env: SupabaseEnv, marketId: string, outcome:
     const row = data as Record<string, unknown>;
     return { ok: true, market: toMarketViewRaw(row.market as Record<string, unknown>), payouts: Number(row.refunds ?? 0) };
   }
-  const { data, error } = await supabase.rpc("resolve_market", { p_market_id: marketId, p_outcome: outcome.toUpperCase() });
-  if (error || !data) return { ok: false, error: error?.message || "resolve failed" };
-  const row = data as Record<string, unknown>;
-  return { ok: true, market: toMarketViewRaw(row.market as Record<string, unknown>), payouts: Number(row.payouts ?? 0) };
+
+  // JS-based resolve (the resolve_market SQL has an enum/text mismatch).
+  const target = outcome.toUpperCase();
+  const { data: positions, error: posError } = await supabase
+    .from("positions")
+    .select("user_id, shares")
+    .eq("market_id", marketId)
+    .eq("outcome", target);
+  if (posError) return { ok: false, error: posError.message };
+
+  const updates: { user_id: string; shares: number }[] = (positions ?? []) as { user_id: string; shares: number }[];
+  const userIds = [...new Set(updates.map((p) => p.user_id))];
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profError } = await supabase
+      .from("profiles")
+      .select("id, demo_balance")
+      .in("id", userIds);
+    if (profError) return { ok: false, error: profError.message };
+    const balMap = new Map<string, number>();
+    for (const u of (profiles ?? []) as { id: string; demo_balance: number }[]) {
+      balMap.set(u.id, Number(u.demo_balance ?? 0));
+    }
+    for (const p of updates) {
+      const cur = balMap.get(p.user_id) ?? 0;
+      const { error: upError } = await supabase
+        .from("profiles")
+        .update({ demo_balance: cur + Number(p.shares) })
+        .eq("id", p.user_id);
+      if (upError) return { ok: false, error: upError.message };
+    }
+  }
+
+  const { error: delError } = await supabase.from("positions").delete().eq("market_id", marketId);
+  if (delError) return { ok: false, error: delError.message };
+
+  const now = new Date().toISOString();
+  const { data: m, error: upError } = await supabase
+    .from("markets")
+    .update({
+      status: "resolved",
+      outcome: target,
+      resolved_at: now,
+      yes_price: target === "YES" ? 0.9999 : 0.0001,
+      updated_at: now,
+    })
+    .eq("id", marketId)
+    .select("*")
+    .single();
+  if (upError || !m) return { ok: false, error: upError?.message || "resolve update failed" };
+
+  return { ok: true, market: toMarketViewRaw(m as Record<string, unknown>), payouts: userIds.length };
 }
 
 export async function quote(

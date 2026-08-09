@@ -28,6 +28,10 @@
     "head_sampling_rate": 1
   },
 
+  "triggers": {
+    "crons": ["*/30 * * * *"]
+  },
+
   // Bundle Inter TTF for OG PNG text rendering (resvg has no system fonts)
   "rules": [
     {
