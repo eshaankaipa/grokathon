@@ -102,11 +102,11 @@ export async function runSweeper(
     return { ok: false, created: 0, failed: 0, skipped: 0, results: [{ name: "config", decision: "REJECT", score: 0, error: "XAI_API_KEY not configured" }] };
   }
 
-  const woeid = opts.woeid ?? 1;
+  const woeid = opts.woeid ?? (env.X_TRENDS_WOEID ? Number(env.X_TRENDS_WOEID) : 1) ?? 1;
   const maxTopics = opts.maxTopics ?? 10;
   const minVolume = opts.minVolume ?? 50;
   const maxPosts = opts.maxPosts ?? 15;
-  const maxCreate = opts.maxCreate ?? 3;
+  const maxCreate = opts.maxCreate ?? (env.SWEEPER_MAX_CREATE ? Number(env.SWEEPER_MAX_CREATE) : 3) ?? 3;
   const minScore = opts.minScore ?? 0.45;
 
   console.log(`sweeper: fetching trends (woeid=${woeid})`);

@@ -26,6 +26,8 @@ import {
   getMarketPositions,
   getPositions,
   getProfile,
+  getTrades,
+  getUserTrades,
   listMarkets,
   sellPosition,
   subscribeToMarket,
@@ -351,7 +353,32 @@ function TradePanel({ market, balance, openAuth, onTradeComplete }) {
   );
 }
 
+const timeAgo = (isoString) => {
+  const seconds = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(isoString).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
 function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) {
+  const [trades, setTrades] = useState([]);
+  const [tradesLoading, setTradesLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setTradesLoading(true);
+    getTrades(market.id, 20)
+      .then((nextTrades) => { if (active) setTrades(nextTrades); })
+      .catch((error) => console.error("Could not load trades", error))
+      .finally(() => { if (active) setTradesLoading(false); });
+    return () => { active = false; };
+  }, [market.id]);
+
   return (
     <main className="detail-page page-shell">
       <button className="back-link" onClick={() => navigate("/")}><ArrowLeft size={16} /> All markets</button>
@@ -373,6 +400,26 @@ function MarketDetail({ market, navigate, openAuth, balance, onTradeComplete }) 
             <div><span>Traders</span><strong>{compact(market.traders)}</strong></div>
             <div><span>Closes</span><strong>{market.closesAt}</strong></div>
           </div>
+          <section className="trade-history">
+            <h2>Trade History</h2>
+            {tradesLoading ? (
+              <div className="trade-history-loading"><LoaderCircle className="spin" size={16} /> Loading trades…</div>
+            ) : trades.length === 0 ? (
+              <p className="trade-history-empty">No trades recorded for this market yet.</p>
+            ) : (
+              <div className="trade-history-table">
+                {trades.map((trade) => (
+                  <div className="trade-row" key={trade.id}>
+                    <span className={`trade-side ${trade.outcome.toLowerCase()}`}>{trade.action === "sell" ? "Sold" : "Bought"} {trade.outcome}</span>
+                    <span className="trade-shares">{Number(trade.shares).toFixed(2)} shares</span>
+                    <span className="trade-price">@{Math.round(Number(trade.price) * 100)}¢</span>
+                    <span className="trade-amount">{money(Number(trade.amount))}</span>
+                    <span className="trade-time">{timeAgo(trade.createdAt)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </section>
         <TradePanel market={market} balance={balance} openAuth={openAuth} onTradeComplete={onTradeComplete} />
       </div>

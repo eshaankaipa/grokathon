@@ -195,6 +195,56 @@ export function estimateLmsrSaleProceeds(market, outcome, shares) {
   return -liquidity * Math.log((1 - sidePrice) + sidePrice * Math.exp(-shares / liquidity));
 }
 
+export async function getTrades(marketSlug, limit = 30) {
+  const client = requireClient();
+  const { data: marketData, error: marketError } = await client
+    .from("markets")
+    .select("id")
+    .eq("slug", marketSlug)
+    .maybeSingle();
+  if (marketError) throw marketError;
+  if (!marketData) return [];
+
+  const { data, error } = await client
+    .from("trades")
+    .select("id,user_id,outcome,amount,price,shares,created_at,action")
+    .eq("market_id", marketData.id)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map((trade) => ({
+    id: trade.id,
+    outcome: trade.outcome,
+    amount: Number(trade.amount),
+    price: Number(trade.price),
+    shares: Number(trade.shares),
+    action: trade.action || "buy",
+    createdAt: trade.created_at,
+  }));
+}
+
+export async function getUserTrades(limit = 50) {
+  const client = requireClient();
+  const { data, error } = await client
+    .from("trades")
+    .select("id,market_id,outcome,amount,price,shares,created_at,action,markets(slug,question)")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map((trade) => ({
+    id: trade.id,
+    marketId: trade.market_id,
+    marketSlug: trade.markets?.slug,
+    marketQuestion: trade.markets?.question,
+    outcome: trade.outcome,
+    amount: Number(trade.amount),
+    price: Number(trade.price),
+    shares: Number(trade.shares),
+    action: trade.action || "buy",
+    createdAt: trade.created_at,
+  }));
+}
+
 export function subscribeToMarket(slug, onChange) {
   if (!supabase) return () => {};
   const channel = supabase

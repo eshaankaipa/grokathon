@@ -47,6 +47,8 @@ export interface Env {
   X_ACCESS_TOKEN: string;
   X_ACCESS_TOKEN_SECRET: string;
   X_BEARER_TOKEN: string;
+  X_TRENDS_WOEID?: string;
+  SWEEPER_MAX_CREATE?: string;
   ADMIN_TOKEN: string;
   XAI_API_KEY: string;
   SUPABASE_URL: string;
